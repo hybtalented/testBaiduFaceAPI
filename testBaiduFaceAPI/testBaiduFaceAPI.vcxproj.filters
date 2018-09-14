@@ -36,14 +36,59 @@
     <ClCompile Include="testbaidufaceapi.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="setting.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fileoperator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="loadFaceDB.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="createFaceDB.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dboperation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DBTreeManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemThread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FaceServerThread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="testbaidufaceapi.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="loadFaceDB.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="createFaceDB.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="DBTreeManager.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="ItemThread.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="FaceServerThread.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <QtUic Include="testbaidufaceapi.ui">
+      <Filter>Form Files</Filter>
+    </QtUic>
+    <QtUic Include="loadFaceDB.ui">
+      <Filter>Form Files</Filter>
+    </QtUic>
+    <QtUic Include="DBTreeManager.ui">
       <Filter>Form Files</Filter>
     </QtUic>
   </ItemGroup>

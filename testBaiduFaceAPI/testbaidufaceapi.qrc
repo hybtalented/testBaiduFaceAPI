@@ -1,4 +1,38 @@
 <RCC>
-    <qresource prefix="testBaiduFaceAPI">
+    <qresource prefix="/testBaiduFaceAPI">
+        <file>Resources/finder.png</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file>Resources/database20.png</file>
+        <file>Resources/database21.png</file>
+        <file>Resources/approval.png</file>
+        <file>Resources/database17.png</file>
+        <file>Resources/settings (1).png</file>
+        <file>Resources/fileexplorer (1).png</file>
+        <file>Resources/warning15.png</file>
+        <file>Resources/database15.png</file>
+        <file>Resources/database16.png</file>
+        <file>Resources/database18.png</file>
+        <file>Resources/database19.png</file>
+        <file>Resources/user.png</file>
+        <file>Resources/group.png</file>
+        <file>Resources/Delete .png</file>
+        <file>Resources/delete.png</file>
+        <file>Resources/settings.png</file>
+        <file>Resources/defaultsetting.png</file>
+        <file>Resources/file.png</file>
+        <file>Resources/fileexplorer.png</file>
+        <file>Resources/savepicture.png</file>
+        <file>Resources/savesetting.png</file>
+        <file>Resources/savetext.png</file>
+        <file>Resources/increase.png</file>
+        <file>Resources/plus77.png</file>
+    </qresource>
+    <qresource prefix="/state">
+        <file>Resources/cancel.png</file>
+        <file>Resources/have.png</file>
+        <file>Resources/stop.png</file>
+        <file>Resources/add73.png</file>
+        <file>Resources/minus.png</file>
     </qresource>
 </RCC>
