@@ -1,4 +1,5 @@
 #include "createFaceDB.h"
+#include"DBTreeManager.h"
 #include<json/json.h>
 #include<qdir.h>
 #include<qmessagebox.h>
@@ -8,11 +9,10 @@
 #include<qmutex.h>
 #include<qtimer.h>
 #include"createFaceDB.h"
-#include"DBTreeManager.h"
+
 createFaceDB::createFaceDB(QString dn, QString g, DBTreeManager * a):ItemThread(a,g),dirname(dn),group(g),db(a),total(0),filenum(0)
 {
 	QThread::start();
-	setCount(&filenum, &total);
 	setActionText();
 	act->setToolTip(QString("Directory:%1 \nGroup:%2").arg(dirname).arg(g));
 	QDir dir(dirname);

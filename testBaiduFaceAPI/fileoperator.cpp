@@ -12,12 +12,12 @@ void testBaiduFaceAPI::FileOpen() {
 	}
 	QFileInfo fileinfo(files[0]);
 	setCurrentDir( fileinfo.dir().absolutePath());
-	disconnect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
+	disconnect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
 	ui.filetree->UI().filetree->clear();
 	for (auto it = files.begin(); it != files.end(); ++it) {
 		addItem(ui.filetree->UI().filetree,*it);
 	}
-	connect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *,int)), this, SLOT(fileItemClicked(QTreeWidgetItem *,int)));
+	connect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *,int)), this, SLOT(fileItemClicked(QTreeWidgetItem *,int)));
 	switchToManageMode(false, false);
 }
 void testBaiduFaceAPI::DirOpen() {

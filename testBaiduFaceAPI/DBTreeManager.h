@@ -1,8 +1,12 @@
 #pragma once
+#include<exception>
 #include <qtreewidget.h>
 #include<baidu_face_api.h>
 #include<json/json.h>
 #include"ui_DBTreeManager.h"
+#define OTL_ORA10G
+#include"otlv4.h"
+
 class testBaiduFaceAPI;
 class DBTreeManager;
 class DBTreeManagerItem :
@@ -49,8 +53,11 @@ class DBTreeManager :
 {
 	Q_OBJECT
 public:
-	DBTreeManager(QWidget * parent);
-	~DBTreeManager();
+	DBTreeManager(QWidget * parent)throw(std::exception);
+	~DBTreeManager()noexcept(true);
+	const char* const oracle_login_data = "face/face@sale";
+	const char* const face_table_name = "FACEWAREHOUSE_TEST";
+	const char* const face_db_addr = "db/face.db";
 	void setMenu(QMenu*);
 	// 百度人脸识别模块的配置
 	void setSetting(Setting&setting);
@@ -60,6 +67,17 @@ public:
 	QStringList ReadGroup();
 	// 读取用户列表 
 	QStringList ReadPerson(const char* groupname);
+	// 读取用户信息
+	const char* ReadUserInfo(const char* group, const char* user);
+	// 增加群组
+	const char* AddGroup(const char* group);
+	// 增加用户
+	const char* AddUser(const char* group,const char* user, const char* img, const char* user_info);
+
+	// 比对两张Base64的图片
+	QString CompareBase64(const char*, const char*);
+	// 图片与人类库比较
+	QString CompareWithGroup(const char*imgbase64, const char*group,const char* user=nullptr);
 	void deleteGroup(const char*groupname);
 	void deleteUser(const char*groupname,const char*username);
 	int createFace(const char*user, const char* group, const char* filepath, const char* filename);
@@ -86,9 +104,12 @@ public slots:
 	void slotItemDoubleClicked(QTreeWidgetItem*, int);
 	void slotItemClicked(QTreeWidgetItem*, int);
 signals:
-
+	void PathChanged();
+	void PathChangeActionClicked();
+	void SearchButtonClicked();
 private:
 	void initBaiduFaceApi();//对百度人脸识别api初始化
+	void initDB();//初始化数据库
     //读取start开始的10个群组
 	int Read10Group(QStringList&, int start);
 	// 读取start开始的100个用户
@@ -101,6 +122,7 @@ private:
 	BaiduFaceApi* baiduApi;
 	QLineEdit* current_path;
 	Ui::DBManager ui;
+	otl_connect db;
 };
 void deleteDir(const QString& dirname);
 void deleteFile(const QString& filename);

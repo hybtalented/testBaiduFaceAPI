@@ -1,20 +1,28 @@
 #include "DBTreeManager.h"
 #include<json/json.h>
 #include<qdir.h>
+#include<qdebug.h>
 using namespace Json;
-
-DBTreeManager::DBTreeManager(QWidget*parent):QWidget(this),m_menu(0)
+#define DB_PREFIX "TEST_"
+#define DB_TABLE(table)  ((QString(DB_PREFIX)+#table).toStdString().c_str())
+#define TABLE(table) #table
+DBTreeManager::DBTreeManager(QWidget*parent)throw(std::exception):QWidget(parent),m_menu(nullptr)
 {
+	initDB();
 	ui.setupUi(this);
 	initBaiduFaceApi();
-	connect(this, SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemDoubleClocked(QTreeWidgetItem*, int)));
-	connect(this, SIGNAL(itemClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemClocked(QTreeWidgetItem*, int)));
+	connect(ui.filetree, SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemDoubleClicked(QTreeWidgetItem*, int)));
+	connect(ui.filetree, SIGNAL(itemClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemClicked(QTreeWidgetItem*, int)));
 	ui.filetree->setItemsExpandable(true);
+	connect(ui.lineEdit, SIGNAL(editingFinished()), this, SIGNAL(PathChanged()));
+	connect(ui.pushButton, SIGNAL(clicked()), this, SIGNAL(PathChangeActionClicked()));
+	connect(ui.pushButton_2, SIGNAL(clicked()), this, SIGNAL(SearchButtonClicked()));
 }
 
 
-DBTreeManager::~DBTreeManager()
+DBTreeManager::~DBTreeManager()noexcept(true)
 {
+	db.logoff();
 	delete baiduApi;
 }
 
@@ -76,6 +84,40 @@ QStringList DBTreeManager::ReadPerson(const char * groupname)
 	QStringList users;
 	for (int start = 0; Read100Person(groupname, start,users) == 100; start += 100);
 	return users;
+}
+/* DBTreeManager::ReadUserInfo
+  功能： 读取用户信息
+  完成情况； 未测试
+*/
+const char* DBTreeManager::ReadUserInfo(const char* group, const char* user) {
+	return baiduApi->get_user_info(user, group);
+	
+}
+const char * DBTreeManager::AddGroup(const char * group)
+{
+	return baiduApi->group_add(group);
+}
+const char * DBTreeManager::AddUser(const char * group, const char * user,const char* img,  const char* user_info)
+{
+	return baiduApi->user_add(user,group,img,1,user_info);
+}
+/* DBTreeManager::ReadPerson
+  功能： 读取用户列表
+  完成情况； 完成
+  返回值： 匹配结果
+*/
+QString DBTreeManager::CompareBase64(const char *img1, const char *img2)
+{
+	return  baiduApi->match(img1, 1, img2, 1);
+}
+QString DBTreeManager::CompareWithGroup(const char * imgbase64, const char * group, const char * user)
+{
+	if (strlen(group)) {
+		return baiduApi->identify(imgbase64, 1,group,user);
+	}
+	else {
+		return baiduApi->identify(imgbase64, 1);
+	}
 }
 void DBTreeManager::deleteGroup(const char * groupname)
 {
@@ -191,6 +233,7 @@ int DBTreeManager::getFileInfo(const QString &str, QString&filename, QString &fi
 	if (reader.parse(str.toStdString(), value)) {
 		filename = value["name"].asCString();
 		filetoken = value["token"].asCString();
+		return 0;
 	}
 	else {
 		return 1;
@@ -237,7 +280,7 @@ int DBTreeManager::Read10Group(QStringList & ret, int start)
 	int groupnum = 0;
 	std::string  res = baiduApi->get_group_list(start, 10);
 	for (auto it : getBaiduList(res.c_str(), "group")) {
-		ret.append(it);
+		ret << it;
 		groupnum++;
 	}
 	return groupnum;
@@ -338,7 +381,30 @@ void DBTreeManager::initBaiduFaceApi() {
 	//	}
 
 		// 提前加载人脸库到内存
-	// api->load_db_face();
+	baiduApi->load_db_face();
+}
+void DBTreeManager::initDB()
+{
+	try {
+		db.rlogon(oracle_login_data);
+		// 查询修改时间戳
+		const char* findtablestr = "select count(table_name) from all_tables where owner='FACE' and table_name=':f<int>'";
+		QString createtablestr = "select";
+		int count;
+		otl_stream o(50, findtablestr, db);
+		o << DB_TABLE(TIMESTAMP);
+		o >> count;
+		if (!count) {
+			o.open(50, createtablestr.arg(DB_TABLE(TIMESTAMP)).arg("value").toStdString().c_str(), db);
+		}
+	}
+	catch (otl_exception &p) {
+		qDebug() << p.msg << endl; // print out error message
+		qDebug() << p.stm_text << endl; // print out SQL that caused the error
+		qDebug() << p.var_info << endl; // print out the variable that caused the error
+		throw std::exception("connect to  oracle failed!");
+	}
+
 }
 //对百度人脸识别的相关设置
 

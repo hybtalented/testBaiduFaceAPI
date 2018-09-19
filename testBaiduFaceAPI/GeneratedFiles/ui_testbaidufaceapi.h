@@ -196,7 +196,9 @@ public:
         gridLayout->addWidget(filetree, 0, 0, 2, 1);
 
         gridLayout->setRowStretch(0, 3);
+        gridLayout->setRowStretch(1, 1);
         gridLayout->setColumnStretch(0, 1);
+        gridLayout->setColumnStretch(1, 3);
         testBaiduFaceAPIClass->setCentralWidget(centralWidget);
         menuBar = new QMenuBar(testBaiduFaceAPIClass);
         menuBar->setObjectName(QStringLiteral("menuBar"));
@@ -283,8 +285,10 @@ public:
         QObject::connect(actiondefault_setting, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(readSetting()));
         QObject::connect(actionsave_setting, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(saveSetting()));
         QObject::connect(actionnew_repo, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(LoadFaceDB()));
-        QObject::connect(actionmanage, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(manageMode()));
+        QObject::connect(actionmanage, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(switchToManageMode()));
         QObject::connect(actiongroupdel, SIGNAL(triggered()), testBaiduFaceAPIClass, SLOT(groupDelete()));
+        QObject::connect(filetree, SIGNAL(PathChangeActionClicked()), testBaiduFaceAPIClass, SLOT(openFaceRepoDir()));
+        QObject::connect(filetree, SIGNAL(PathChanged()), testBaiduFaceAPIClass, SLOT(PathChanged()));
 
         QMetaObject::connectSlotsByName(testBaiduFaceAPIClass);
     } // setupUi

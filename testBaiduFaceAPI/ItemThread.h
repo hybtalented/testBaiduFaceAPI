@@ -21,7 +21,6 @@ class ItemThread :
 public:;
 	ItemThread(QWidget*parent, QString n);
 	QAction* getAction() { return act; }
-	void setCount(const int* fn, const int* t) { filenum = fn, total = t; }
 	~ItemThread() {}
 public slots:
 	void processEnd() {
@@ -33,19 +32,11 @@ signals:
 	void sendMessage(QString, QString, QString);
 protected:
 	virtual void setActionText() {
-		int fn, t;
-		if(filenum){
-			fn = *filenum;
-		}
-		if (total) {
-			t = *total;
-		}
-		act->setText((name + "(%4/%5)(%1h:%2m:%3s)").arg(hour).arg(min).arg(sec).arg(fn).arg(t));
+		act->setText((name + "(%1h:%2m:%3s)").arg(hour).arg(min).arg(sec));
 	}
 	short sec, min, hour;
 	QTimer* timer;
 	QString name;
-	const int *filenum,  *total;
 	ItemThreadAction * act;
 };
 

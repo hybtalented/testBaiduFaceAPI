@@ -1,13 +1,12 @@
 #include "ItemThread.h"
 #include<qtimer.h>
-ItemThread::ItemThread(QWidget*parent, QString n) :  QThread(parent),sec(0), min(0), hour(0),name(n),filenum(nullptr),total(nullptr)
+ItemThread::ItemThread(QWidget*parent, QString n) :  QThread(parent),sec(0), min(0), hour(0),name(n)
 {
-
 	act = new ItemThreadAction(this);
 	timer = new QTimer(this);
 	setActionText();
 	timer->start(1000);
-	connect(timer, SIGNAL(timeout()), this, SLOT(timeout()));
+	connect(timer, SIGNAL(timeout()), this, SLOT(slotTimeout()));
 	connect(this, SIGNAL(finished()), this, SLOT(processEnd()));
 }
 void ItemThread::slotTimeout()

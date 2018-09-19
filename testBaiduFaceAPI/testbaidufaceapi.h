@@ -38,7 +38,7 @@ public slots:
 	void groupDelete();
 	void updateCurrentPathDB();
 	void switchToManageMode(bool manage = true, bool update=true);
-	void manageMode();
+	void PathChanged();
 private:
 	void setBaiduFaceApi();//对百度人脸识别的设置
 	void addItem(QTreeWidgetItem*,QString file);

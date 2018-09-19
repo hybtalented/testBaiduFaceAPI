@@ -32,15 +32,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\include;D:\ku\OpenCV\4vs2017releasewithpython\include;$(IncludePath)</IncludePath>
+    <IncludePath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\include;D:\ku\OpenCV\4vs2017releasewithpython\include;C:\db\client\instantclient_11_2\oci\include;C:\db\sqllite\include;$(IncludePath)</IncludePath>
     <ExecutablePath>D:\ku\OpenCV\4vs2017releasewithpython\x64\vc15\bin;D:\ku\Baidu_Face_Offline_SDK_Windows\x64;$(ExecutablePath)</ExecutablePath>
-    <LibraryPath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\lib\x64;D:\ku\OpenCV\4vs2017releasewithpython\x64\vc15\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\lib\x64;D:\ku\OpenCV\4vs2017releasewithpython\x64\vc15\lib;C:\db\client\instantclient_11_2\oci\lib\msvc;C:\db\sqllite\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\include;D:\ku\OpenCV\4vs2017releasewithpython\include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\ku\OpenCV\4vs2017releasewithpython\x64\vc15\lib;D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\include;D:\ku\OpenCV\4vs2017releasewithpython\include;C:\db\sqllite\include;C:\db\client\instantclient_11_2\oci\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\ku\OpenCV\4vs2017releasewithpython\x64\vc15\lib;D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\lib\x64;C:\db\sqllite\lib;C:\db\client\instantclient_11_2\oci\lib\msvc;$(LibraryPath)</LibraryPath>
     <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
@@ -73,7 +73,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>$(QTDIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>qtmaind.lib;Qt5Cored.lib;Qt5Guid.lib;Qt5Networkd.lib;Qt5Widgetsd.lib;BaiduFaceApi.lib;json_vc71_libmt.lib;opencv_world330d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sqlite3.lib;oci.lib;qtmaind.lib;Qt5Cored.lib;Qt5Guid.lib;Qt5Networkd.lib;Qt5Widgetsd.lib;BaiduFaceApi.lib;json_vc71_libmt.lib;opencv_world330d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <QtMoc>
       <OutputFile>.\GeneratedFiles\$(ConfigurationName)\moc_%(Filename).cpp</OutputFile>
@@ -112,9 +112,8 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>$(QTDIR)\lib;$(OpenCV_dir)\x64\vc15\lib;D:\ku\Baidu_Face_Offline_SDK_Windows\TestFaceApi\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>qtmain.lib;Qt5Core.lib;Qt5Gui.lib;Qt5Network.lib;Qt5Widgets.lib;opencv_world330.lib;BaiduFaceApi.lib;json_vc71_libmt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sqlite3.lib;oci.lib;qtmain.lib;Qt5Core.lib;Qt5Gui.lib;Qt5Network.lib;Qt5Widgets.lib;opencv_world330.lib;BaiduFaceApi.lib;json_vc71_libmt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkStatus>true</LinkStatus>
-      <DataExecutionPrevention>false</DataExecutionPrevention>
     </Link>
     <QtMoc>
       <OutputFile>.\GeneratedFiles\$(ConfigurationName)\moc_%(Filename).cpp</OutputFile>
@@ -144,6 +143,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="dboperation.cpp" />
     <ClCompile Include="setting.cpp" />
+    <ClCompile Include="SQLite.cpp" />
     <ClCompile Include="testbaidufaceapi.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -196,6 +196,10 @@
       <IncludePath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\GeneratedFiles;.;$(QTDIR)\include;.\GeneratedFiles\$(ConfigurationName)\.;$(QTDIR)\include\QtCore;$(QTDIR)\include\QtGui;$(QTDIR)\include\QtANGLE;$(QTDIR)\include\QtNetwork;$(QTDIR)\include\QtWidgets</IncludePath>
       <Define Condition="'$(Configuration)|$(Platform)'=='Release|x64'">_MBCS;UNICODE;_UNICODE;WIN32;WIN64;QT_NO_DEBUG;NDEBUG;QT_CORE_LIB;QT_GUI_LIB;QT_NETWORK_LIB;QT_WIDGETS_LIB</Define>
     </QtMoc>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="otlv4.h" />
+    <ClInclude Include="SQLite.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

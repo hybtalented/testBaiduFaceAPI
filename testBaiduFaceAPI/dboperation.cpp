@@ -41,6 +41,7 @@ void testBaiduFaceAPI::LoadFaceDBProcess(QString dirname, QString group)
 	tasksbar->addAction(cdb->getAction());
 	connect(cdb, SIGNAL(processEnded(createFaceDBAction*)), this, SLOT(ProcessEnd(createFaceDBAction*)));
 	connect(cdb, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
+	connect(this, SIGNAL(destroyed()), cdb, SLOT(terminate()));
 }
 void testBaiduFaceAPI::ProcessEnd(ItemThreadAction*action) {
 

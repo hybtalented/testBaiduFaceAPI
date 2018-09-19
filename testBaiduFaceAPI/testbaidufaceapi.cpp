@@ -5,6 +5,7 @@
 #include<qsettings.h>
 #include<qdebug.h>
 #include<qdir.h>
+#include"FaceServerThread.h"
 QPen testBaiduFaceAPI::penlist[testBaiduFaceAPI::maxDetectFace] = {
 	QPen(QColor(0,0,0),3,Qt::SolidLine),
 	QPen(QColor(200,0,0),3,Qt::SolidLine) ,
@@ -39,6 +40,12 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 	statusBar()->addWidget(tasksbar);
 	tasksbar->show();
 	switchToManageMode(false);
+	FaceServerThread* sthread = new FaceServerThread(this, u8"服务器", ui.filetree);
+	sthread->start();
+	tasksbar->addAction(sthread->getAction());
+	connect(sthread, SIGNAL(processEnded(ItemThreadAction*)), this, SLOT(ProcessEnd(ItemThreadAction*)));
+	connect(sthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
+	connect(this, SIGNAL(destroyed()), sthread, SLOT(terminate()));
 }
 testBaiduFaceAPI::~testBaiduFaceAPI() {
 	QSettings setting("setting.ini", QSettings::Format::NativeFormat, this);
@@ -129,12 +136,12 @@ void testBaiduFaceAPI::fileItemClickedDB(QTreeWidgetItem * item, int column)
 }
 
 void testBaiduFaceAPI::updateCurrentPath() {
-	disconnect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
+	disconnect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
 	ui.filetree->UI().filetree->clear();
 	for (auto file : QDir(ui.filetree->UI().lineEdit->text()).entryList(QStringList() << "*.jpg" << "*.png", QDir::Filters::enum_type::Files, QDir::SortFlags::enum_type::Name)) {
 		addItem(ui.filetree->UI().filetree, ui.filetree->UI().lineEdit->text() + '/' + file);
 	}
-	connect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
+	connect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
 }
 
 void testBaiduFaceAPI::switchToManageMode(bool manage,bool updatewindow)
@@ -143,7 +150,7 @@ void testBaiduFaceAPI::switchToManageMode(bool manage,bool updatewindow)
 	if (manage) {
 		if (!setDB) {
 			setDB = true;
-			disconnect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClickedDB(QTreeWidgetItem *, int)));
+			disconnect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClickedDB(QTreeWidgetItem *, int)));
 			ui.actionFaceSetting->setEnabled(false);
 			ui.actiondefault_setting->setEnabled(false);
 			ui.actionsave_setting->setEnabled(false);
@@ -159,14 +166,14 @@ void testBaiduFaceAPI::switchToManageMode(bool manage,bool updatewindow)
 			ui.filetree->UI().lineEdit_2->show();
 			ui.filetree->UI().lineEdit_3->show();
 			ui.filetree->UI().pushButton_2->show();
-			connect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
+			connect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
 		}
 	    if(updatewindow)
 		    updateCurrentPathDB();
 	}
 	else {
 		if (setDB) {
-			disconnect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
+			disconnect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClicked(QTreeWidgetItem *, int)));
 			setDB = false;
 			ui.actionFaceSetting->setEnabled(true);
 			ui.actiondefault_setting->setEnabled(true);
@@ -183,15 +190,15 @@ void testBaiduFaceAPI::switchToManageMode(bool manage,bool updatewindow)
 			ui.filetree->UI().lineEdit_2->hide();
 			ui.filetree->UI().lineEdit_3->hide();
 			ui.filetree->UI().pushButton_2->hide();
-			connect(ui.filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClickedDB(QTreeWidgetItem *, int)));
+			connect(ui.filetree->UI().filetree, SIGNAL(itemPressed(QTreeWidgetItem *, int)), this, SLOT(fileItemClickedDB(QTreeWidgetItem *, int)));
 		}
 		if(updatewindow)
 		updateCurrentPath();
 	}
 }
-void testBaiduFaceAPI::manageMode()
+void testBaiduFaceAPI::PathChanged()
 {
-	switchToManageMode();
+	switchToManageMode(setDB);
 }
 /*  testBaiduFaceAPI::updateCurrentPathDB
   功能： 更新当前路径和文件列表
@@ -206,4 +213,5 @@ void testBaiduFaceAPI::updateTreeDB(QTreeWidgetItem*,QStringList dbgroup, QStrin
 
 }
 void testBaiduFaceAPI::groupDelete() {
+
 }

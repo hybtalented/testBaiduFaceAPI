@@ -101,4 +101,9 @@
   <include location="testbaidufaceapi.qrc"/>
  </resources>
  <connections/>
+ <slots>
+  <signal>PathChanged()</signal>
+  <signal>PathChangeActionClicked()</signal>
+  <signal>SearchButtonClicked()</signal>
+ </slots>
 </ui>
