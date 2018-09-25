@@ -4,7 +4,8 @@
 #include<algorithm>
 #include"DBTreeManager.h"
 #include<json/json.h>
-
+#include"mydebug.h"
+#include<qtimer.h>
 FaceServer::FaceServer(QObject*parent, DBTreeManager*dbmgr) :QTcpServer(parent),mgr(dbmgr){
 
 }
@@ -12,7 +13,6 @@ void FaceServer::incomingConnection(qintptr socketDescriptor) {
 	FaceSocket *socket = new FaceSocket(socketDescriptor,mgr);
 	connect(socket, SIGNAL(readyRead()), socket, SLOT(RecvData())); // 会移进线程里
 	connect(socket, SIGNAL(disconnected()), this, SLOT(socketDisConn()));
-
 	QThread *thread = new QThread(socket); // 以socket为父类，当socket释放删除后也会删除线程，或者将线程的quit信号关联槽deleteLater()也可以达到效果
 	connect(socket, SIGNAL(disconnected()), thread, SLOT(quit()));
 	socket->moveToThread(thread);
@@ -24,7 +24,7 @@ FaceServerThread::FaceServerThread(QWidget*parent,const QString &name,DBTreeMana
 {
 	server = new FaceServer(this,manager);
 	if (!server->listen(QHostAddress::Any, ListenPort)) {
-		qDebug() << "服务器启动错误：" << server->errorString();
+		Info() << "服务器启动错误：" << server->errorString();
 		sendMessage("服务器启动失败", QString("失败代码为信息:<font color=red> %1</color>").arg(server->errorString()), "&确定");
 		delete server;
 		return;
@@ -44,7 +44,7 @@ void FaceServer::socketDisConn()
 	auto it = std::find(socketlist.begin(), socketlist.end(), socket);
 	if (it != socketlist.end()) {
 		socketlist.erase(it);
-		delete *it;
+		(*it)->deleteLater();
 	}
 }
 
@@ -64,13 +64,13 @@ void FaceSocket::RecvData() {
 	Json::Value value;
 	if (m_recvsize == 0) {
 		if (bytesAvailable() < sizeof(m_recvsize)) {
-			qDebug() << u8"无法读取文件大小，缓冲区过小。";
+			Info() << u8"无法读取文件大小，缓冲区过小。";
 			return;
 		}
 		recv >> m_recvsize;
 	}
 	if (m_recvsize > bytesAvailable()) {
-		qDebug() << u8"无法读取文件，文件未完全载入缓冲区。";
+		Info() << u8"无法读取文件，文件未完全载入缓冲区。";
 		return;
 	}
 	QString recvstr;
@@ -150,7 +150,7 @@ void FaceSocket::RecvData() {
 
 void FaceSocket::SocketErr(QAbstractSocket::SocketError socketError)
 {
-		qDebug()<< QString("socket[%1] ip[%2] port[%3] err[%4]").arg(socketDescriptor()).arg(
+	Info()<< QString("socket[%1] ip[%2] port[%3] err[%4]").arg(socketDescriptor()).arg(
 			peerAddress().toString().toLocal8Bit().data()).arg( peerPort())
 			.arg( errorString().toLocal8Bit().data());
 }
@@ -166,4 +166,28 @@ QTcpSocket* operator<<(QTcpSocket*tcpsocket, const QString&s) {
 	out << length;
     tcpsocket->write(byte);
 	return tcpsocket;
+}
+
+SyncDataBase::SyncDataBase(DBTreeManager*parent) :ItemThread(parent, u8"数据库同步")
+{
+}
+
+
+
+void SyncDataBase::run()
+{
+	DBTreeManager * manager = qobject_cast<DBTreeManager *>(parent());
+	while (1) {
+		if (!manager||!manager->DBInitialized()) {
+			Critical() << "parent is not a DBTreeManager or Database not initialized!";
+			return;
+		}
+		isSync = true;
+		manager->synchronization(manager->getLocalDBTimeStamp(), manager->getRemoteDBtimeStamp());
+		{
+			if (haveStop()) return;
+		}
+		isSync = false;
+		Sleep(15000);
+	}
 }

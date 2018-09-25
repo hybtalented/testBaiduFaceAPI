@@ -107,5 +107,8 @@
     <ClInclude Include="SQLite.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mydebug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

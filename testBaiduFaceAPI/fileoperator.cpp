@@ -2,7 +2,7 @@
 #include<baidu_face_api.h>
 #include<qfiledialog.h>
 #include<qmessagebox.h>
-#include<qdebug.h>
+#include"mydebug.h"
 #include<qmutex.h>
 void testBaiduFaceAPI::FileOpen() {
 	QStringList files = QFileDialog::getOpenFileNames(this, u8"打开文件", ui.filetree->UI().lineEdit->text(), u8"图像文件(*.jpg *.png)");

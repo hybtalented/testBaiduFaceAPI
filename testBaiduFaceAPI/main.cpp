@@ -3,13 +3,16 @@
 #include <QtDebug>
 #include<qfile.h>
 #include<qdatetime.h>
+#include<qmutex.h>
 QFile outputFile("customMessageLog.txt");
 QTextStream textStream(&outputFile);
 void customMessageHandler(QtMsgType type,const QMessageLogContext&context, const QString& msg)
 {
+	static QMutex mutex;
 	QString txtMessage;
 	QDateTime time = QDateTime::currentDateTime();
-	txtMessage=time.toString(u8"yyyy-mm-dd hh:mi:ss\t");
+	txtMessage=time.toString(u8"yyyy-MM-dd HH:mm:ss\t");
+	txtMessage += QString("Thread id: %1 ").arg(__threadid());
 	switch (type)
 	{
 	case QtDebugMsg:    //调试信息提示
@@ -29,13 +32,16 @@ void customMessageHandler(QtMsgType type,const QMessageLogContext&context, const
 		abort();
 	}
 	//保存输出相关信息到指定文件
-	txtMessage += QString(". In FILE\"%1\", FUNCTION %3, LINE%2").arg(context.file).arg(context.line).arg(context.function);
-	textStream << txtMessage << endl;
+	
+	mutex.lock();
+	textStream << qPrintable(txtMessage) << endl;
+	textStream.flush();
+	mutex.unlock();
 }
 
 int main(int argc, char *argv[])
 {
-	outputFile.open(QIODevice::WriteOnly | QIODevice::Append);
+	outputFile.open(QIODevice::WriteOnly |QIODevice::Text| QIODevice::Append);
 	QApplication a(argc, argv);
 	qInstallMessageHandler(&customMessageHandler); //注册MsgHandler回调函数
 	a.setOrganizationName("China Unicom");

@@ -198,6 +198,7 @@
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="mydebug.h" />
     <ClInclude Include="otlv4.h" />
     <ClInclude Include="SQLite.h" />
   </ItemGroup>

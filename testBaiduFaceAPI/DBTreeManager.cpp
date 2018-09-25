@@ -1,22 +1,33 @@
 #include "DBTreeManager.h"
 #include<json/json.h>
 #include<qdir.h>
-#include<qdebug.h>
+#include"mydebug.h"
+#include<qmessagebox.h>
+#include<qdatetime.h>
+
+
 using namespace Json;
-#define DB_PREFIX "TEST_"
-#define DB_TABLE(table)  ((QString(DB_PREFIX)+#table).toStdString().c_str())
-#define TABLE(table) #table
-DBTreeManager::DBTreeManager(QWidget*parent)throw(std::exception):QWidget(parent),m_menu(nullptr)
+
+DBTreeManager::DBTreeManager(QWidget*parent)throw(std::exception) :QWidget(parent), m_menu(nullptr), sqlite(face_db_addr), db_init(false)
 {
-	initDB();
+	if (sqlite.Result()) {
+		QMessageBox::critical(this, u8"打开本地人脸库失败", QString(u8"错误代码:<font color=red> %1 </font>. 错误信息: <font color=red> %2 </font>").arg(sqlite.Result()).arg(sqlite.DB_STATUS()),u8"&退出程序");
+		exit(0);
+	}
 	ui.setupUi(this);
 	initBaiduFaceApi();
+	initDB();
+	if (!db_init) {
+		qCritical() << "DATABASE INITIALIZE FAILED!!";
+	}
 	connect(ui.filetree, SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemDoubleClicked(QTreeWidgetItem*, int)));
 	connect(ui.filetree, SIGNAL(itemClicked(QTreeWidgetItem*, int)), this, SLOT(slotItemClicked(QTreeWidgetItem*, int)));
 	ui.filetree->setItemsExpandable(true);
 	connect(ui.lineEdit, SIGNAL(editingFinished()), this, SIGNAL(PathChanged()));
 	connect(ui.pushButton, SIGNAL(clicked()), this, SIGNAL(PathChangeActionClicked()));
 	connect(ui.pushButton_2, SIGNAL(clicked()), this, SIGNAL(SearchButtonClicked()));
+	connect(this, SIGNAL(setPrograssValue(int)),ui.syncProgress, SLOT(setValue(int)));
+	connect(this, SIGNAL(setPrograssRange(int ,int)), ui.syncProgress, SLOT(setRange(int,int)));
 }
 
 
@@ -99,7 +110,13 @@ const char * DBTreeManager::AddGroup(const char * group)
 }
 const char * DBTreeManager::AddUser(const char * group, const char * user,const char* img,  const char* user_info)
 {
-	return baiduApi->user_add(user,group,img,1,user_info);
+	qint64 id = getSequenceVal(DB_TABLE(USER_SEQUENCE)),time=getCurrentTimeStamp();
+	sqlite.lock();
+	std::string ret= baiduApi->user_add(user, group, img, 1, user_info);
+	sqlite.unLock();
+	/*Json::Value value = selectLocalDB("")
+	if(addRemoteDBUSER(id,user,group,user_info,))*/
+	return ret.c_str();
 }
 /* DBTreeManager::ReadPerson
   功能： 读取用户列表
@@ -239,6 +256,312 @@ int DBTreeManager::getFileInfo(const QString &str, QString&filename, QString &fi
 		return 1;
 	}
 }
+qint64 DBTreeManager::getCurrentTimeStamp()
+{
+	try {
+		otl_stream o(50, FORMAT_3(SELECTSTR, "TO_CHAR(LOCALTIMESTAMP(3),'yyyy-mm-dd HH24:mi:ss.ff3')", "dual", ""),db);
+		char s[100];
+		o >> s;
+		qDebug() << s;
+		int64 a = QDateTime::fromTime_t(0).msecsTo(QDateTime::fromString(s, "yyyy-MM-dd hh:mm:ss.zzz"));
+		qDebug() << "timestamp is(s) " << QDateTime::fromString(s, "yyyy-mm-dd HH24:mi:ss.zzz");
+		return a;
+	}
+	catch (otl_exception p) {
+		Critical() << QString((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;  // print out error message
+		return -1;
+	}
+}
+qint64 DBTreeManager::getLocalDBTimeStamp()
+{
+	SQLITE_RET ret = selectLocalDB("TIME", TABLE(TIMESTAMP), "where IDX=1");
+	if (sqlite.Result() != SQLITE_OK) {
+		Warning() << sqlite.ErrMsg();
+		db_init = false;
+		return -1;
+	}
+	return  ret.getInt64(0, "TIME");
+}
+qint64 DBTreeManager::getRemoteDBtimeStamp()
+{
+	try {
+		otl_stream o;
+		o.open(50, FORMAT_3(SELECTSTR, "TIME", DB_TABLE(TIMESTAMP), "where IDX=1"), db);
+		if (o.eof()) {
+			insertRemoteDB(DB_TABLE(TIMESTAMP), "(1,0)", "");
+			return 0;
+		}
+		OTL_BIGINT time;
+		o >> time;
+		return time;
+	}
+	catch (otl_exception&p) {
+		Warning()<< (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		db_init = false;
+		return -1;
+	}
+	
+}
+qint64 DBTreeManager::getSequenceVal(const char * sequence)
+{
+	try {
+		otl_stream o;
+		o.open(50, FORMAT_3(SELECTSTR, FORMAT_1("%1.nextval",sequence), "dual",""), db);
+		OTL_BIGINT a;
+		o >> a;
+		return a;
+	}
+	catch (otl_exception&p) {
+		Critical() << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return -1;
+	}
+}
+bool DBTreeManager::setLocalTimeStamp(qint64 timestamp)
+{
+	switch (updateLocalDB(TABLE(TIMESTAMP), FORMAT_1("TIME=%1",QVariant::fromValue(timestamp).toString()), "where IDX = 1")) {
+	case SQLITE_OK:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::setRemoteDBtimeStamp(qint64 timestamp)
+{
+	switch (updateRemoteDB(DB_TABLE(TIMESTAMP), FORMAT_1("TIME=%1", QVariant::fromValue(timestamp).toString()), "where IDX = 1")) {
+	case 0:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::addLocalDBUSER(qint64 ID, const char * USER_ID, const char * GROUP_ID, const char * USER_INFO, qint64 CREATE_TIME)
+{
+	switch (insertLocalDB(FORMAT_2("%1 (%2)",TABLE(USER),"ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME"), FORMAT_5("%1,'%2','%3','%4',%5 ", QVariant::fromValue(ID).toString(), USER_ID,GROUP_ID, USER_INFO,CREATE_TIME), "where IDX = 1")) {
+	case SQLITE_OK:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::addRemoteDBUSER(qint64 ID, const char * USER_ID, const char * GROUP_ID, const char * USER_INFO, qint64 CREATE_TIME)
+{
+	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER), "ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME"), FORMAT_5("%1,'%2','%3','%4',%5 ", ID, USER_ID, GROUP_ID, USER_INFO, CREATE_TIME), "")) {
+	case 0:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool DBTreeManager::addLocalDBUSER_GROUP(qint64 ID, const char * GROUP_ID, qint64 CREATE_TIME)
+{
+	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME"), FORMAT_3("%1,'%2',%3 ", ID,  GROUP_ID,  CREATE_TIME), "")) {
+	case SQLITE_OK:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::addRemoteDBUSER_GROUP(qint64 ID, const char * GROUP_ID, qint64 CREATE_TIME)
+{
+	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME"), FORMAT_3("%1,'%2',%3 ", ID, GROUP_ID, CREATE_TIME), "")) {
+	case 0:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool DBTreeManager::addLocalDBFEATURE(qint64 ID, const char * FACE_TOKEN, const char * GROUP_ID, const char * USER_ID, const char * FAUTURE, qint64 CREATE_TIME)
+{
+	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FAUTURE,CREATE_TIME"), FORMAT_6("%1,'%2','%3','%4','%5',%6", QVariant::fromValue(ID).toString(), FACE_TOKEN,GROUP_ID, USER_ID, FAUTURE, CREATE_TIME), "")) {
+	case SQLITE_OK:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::addRemoteDBFEATURE(qint64 ID, const char * FACE_TOKEN, const char * GROUP_ID, const char * USER_ID, const char * FAUTURE, qint64 CREATE_TIME)
+{
+	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FAUTURE,CREATE_TIME"), FORMAT_6("%1,'%2','%3','%4','%5',%6", ID, FACE_TOKEN, GROUP_ID, USER_ID, FAUTURE, CREATE_TIME), "")) {
+	case 0:
+		return true;
+	default:
+		return false;
+	}
+}
+bool DBTreeManager::addRemoteDBRECODE(qint64 id, qint64 time, const char * user, const char * group, RECODE_OPER oper)
+{
+	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(RECODE), "ID,TIME,USER,GROUP,OPER"), FORMAT_5("%1,%2,'%3','%4',%5", id, time, user, group, oper), "")) {
+	case 0:
+		return true;
+	default:
+		return false;
+	}
+}
+SQLITE_RET DBTreeManager::selectLocalDB(const char * content, const char * table, const char * addtion_option)
+{
+	sqlite.lock();
+	SQLITE_RET ret=sqlite.exec(FORMAT_3(SELECTSTR, content, table, addtion_option));
+	if (sqlite.Result() != SQLITE_OK) {
+		Info() << sqlite.ErrMsg();
+		ret.rows = 0;
+		ret.value.clear();
+	}
+	sqlite.unLock();
+	return ret;
+}
+
+
+int DBTreeManager::insertLocalDB(const char * table, const char * content, const char * addtion_option)
+{
+	sqlite.lock();
+	SQLITE_RET ret = sqlite.exec(FORMAT_3(INSERTSTR, table, content, addtion_option));
+	if (sqlite.Result() != SQLITE_OK) {
+		Info() << sqlite.ErrMsg();
+	}
+	sqlite.unLock();
+	return sqlite.Result();
+}
+
+int DBTreeManager::insertRemoteDB(const char * table, const char * content, const char * addtion_option)
+{
+	try {
+		otl_stream o(100, FORMAT_3(INSERTSTR, table, content, addtion_option), db);
+		return 0;
+	}
+	catch (otl_exception& p) {
+		Info()<<"Error Code:"<<p.code<<" "<<(char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return p.code;
+	}
+}
+
+int DBTreeManager::updateLocalDB(const char * table, const char * columns, const char * addtion_option)
+{
+	sqlite.lock();
+	SQLITE_RET ret = sqlite.exec(FORMAT_3(UPDATESTR, table, columns, addtion_option));
+	if (sqlite.Result() != SQLITE_OK) {
+		Info() << sqlite.ErrMsg();
+	}
+	sqlite.unLock();
+	return sqlite.Result();
+}
+
+int DBTreeManager::updateRemoteDB(const char * table, const char * columns, const char * addtion_option)
+{
+	try {
+		otl_stream o(100, FORMAT_3(UPDATESTR, table, columns, addtion_option), db);
+		return 0;
+	}
+	catch (otl_exception& p) {
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return p.code;
+	}
+}
+
+int DBTreeManager::alterLocalDB(const char * table, const char * option, const char * content)
+{
+	sqlite.lock();
+	SQLITE_RET ret = sqlite.exec(FORMAT_3(ALTERSTR, table, option, content));
+	if (sqlite.Result() != SQLITE_OK) {
+		Info() << sqlite.ErrMsg();
+	}
+	sqlite.unLock();
+	return sqlite.Result();
+}
+
+int DBTreeManager::alterRemoteDB(const char * table, const char * option, const char * content)
+{
+	try {
+		otl_stream o(100, FORMAT_3(ALTERSTR, table, option, content), db);
+		return 0;
+	}
+	catch (otl_exception& p) {
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return p.code;
+	}
+}
+
+int DBTreeManager::createLocalTable(const char * table, const char * coldefs, const char * addtion_option)
+{
+	sqlite.lock();
+	Debug() << FORMAT_3(CREATETABLESTR, table, coldefs, addtion_option);
+	SQLITE_RET ret = sqlite.exec(FORMAT_3(CREATETABLESTR, table, coldefs, addtion_option));
+	if (sqlite.Result() != SQLITE_OK) {
+		Info() << sqlite.ErrMsg();
+	}
+	sqlite.unLock();
+	return sqlite.Result();
+}
+
+int DBTreeManager::createRemoteTable(const char * table, const char * coldefs, const char * addtion_option)
+{
+	try {
+		Debug() << FORMAT_3(CREATETABLESTR, table, coldefs, addtion_option);
+		otl_stream o(100, FORMAT_3(CREATETABLESTR, table, coldefs, addtion_option), db);
+		return 0;
+	}
+	catch (otl_exception& p) {
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return p.code;
+	}
+}
+
+int DBTreeManager::createRemoteSequence(const char * sequence)
+{
+	try {
+		Debug() << FORMAT_2(CREATESEQUENCESTR, sequence, " increment by 1 start with 1");
+		otl_stream o(1, FORMAT_2(CREATESEQUENCESTR, sequence, " increment by 1 start with 1"),db);
+		return 0;
+	}
+	catch (otl_exception& p) {
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return p.code;
+	}
+}
+int DBTreeManager::LocalTableExist(const char * table)
+{
+	SQLITE_RET ret = selectLocalDB("count(*) num", "sqlite_master", FORMAT_1("where TYPE='table' and name='%1'",table));
+	if (sqlite.Result() == SQLITE_OK && ret.rows == 1) {
+		return ret.getInt(0, "num");
+	}
+	return -1;
+}
+
+int DBTreeManager::RemoteTableExist(const char * table)
+{
+	try {
+		Debug() << "find table" << table<<"query "<< FORMAT_3(SELECTSTR, "count(*)", "USER_ALL_TABLES", FORMAT_1("where TABLE_NAME='%1'", table));
+		int count;
+		otl_stream o(50, FORMAT_3(SELECTSTR, "count(*)", "USER_ALL_TABLES", FORMAT_1("where TABLE_NAME='%1'", table)), db);
+		o >> count;
+		Debug() << "count is " << count;
+		return count;
+	}
+	catch(otl_exception&p){
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return -1;
+	}
+}
+
+int DBTreeManager::RemoteSequenceExist(const char * sequence)
+{
+	try {
+		int count;
+		Debug() << "find sequence " << sequence<<"query"<< FORMAT_3(SELECTSTR, "count(0)", "user_sequences", FORMAT_1("where SEQUENCE_NAME='%1'", sequence));
+		otl_stream o(50, FORMAT_3(SELECTSTR, "count(0)", "user_sequences", FORMAT_1("where SEQUENCE_NAME='%1')", sequence)), db);
+		Debug() << "before output count";
+		o >> count;
+		Debug() << "count is " << count;
+		return count;
+	}
+	catch (otl_exception&p) {
+		Info() << "Error Code:" << p.code << " " << (char*)p.msg << "On query: " << (char*)p.stm_text << "Cause by " << p.var_info;
+		return -1;
+	}
+	return 0;
+}
+
 /* DBTreeManager::addItem
   功能： 在对应下增加子节点
   完成情况； 未完成
@@ -322,7 +645,7 @@ QStringList DBTreeManager::getBaiduList(const char*res, const char* name) {
 		if (value["errno"].asInt() == 0) {
 			value = value["data"][(std::string(name) + "_id_list")];
 			if (value.isArray()) {
-				for (auto i = 0; i < value.size(); ++i) {
+				for (uint i = 0; i < value.size(); ++i) {
 					Value id = value[i][(std::string(name) + "_id")];
 					if (id.isString())
 						ret << id.asCString();
@@ -343,7 +666,7 @@ QStringList DBTreeManager::getFlist(const char * group,const char* user)
 	if (value["errno"] == 0) {
 		value = value["data"]["result"];
 		if (value.isArray()) {
-			for (auto i = 0; i < value.size(); ++i) {
+			for (uint i = 0; i < value.size(); ++i) {
 				root.clear(); temp.clear();
 				if (value[i]["user_info"].isString()) {
 					temp["token"] = value[i]["face_token"].asCString();
@@ -364,6 +687,12 @@ void DBTreeManager::delelteSelection() {
 		delete item;
 	}
 }
+void DBTreeManager::synchronization(qint64 local, qint64 remote)
+{
+    if (local < remote) {
+		emit setPrograssRange(0, 0);
+	}
+}
 // 对百度人脸识别接口的初始化函数
 void DBTreeManager::initBaiduFaceApi() {
 	baiduApi = new BaiduFaceApi();
@@ -372,39 +701,114 @@ void DBTreeManager::initBaiduFaceApi() {
  // 不能混用
 	bool id_card = false;
 	//	try {
-	baiduApi->sdk_init(id_card);
+	Debug()<<"on sdk_init result:"<<baiduApi->sdk_init(id_card);
 	//	}
 	//	catch (std::length_error ex) {
 	//		std::cout << ex.what()<<std::endl;
 	//		std::vector<int> a;
 	//		std::cout << a.max_size() << std::endl;
 	//	}
-
-		// 提前加载人脸库到内存
-	baiduApi->load_db_face();
+	Debug() << "on load_db_face" << baiduApi->load_db_face();
 }
 void DBTreeManager::initDB()
 {
+	qint64 timestamp, sqlitetimestamp;
 	try {
+		db.otl_initialize(1);
 		db.rlogon(oracle_login_data);
 		// 查询修改时间戳
-		const char* findtablestr = "select count(table_name) from all_tables where owner='FACE' and table_name=':f<int>'";
-		QString createtablestr = "select";
-		int count;
-		otl_stream o(50, findtablestr, db);
-		o << DB_TABLE(TIMESTAMP);
-		o >> count;
-		if (!count) {
-			o.open(50, createtablestr.arg(DB_TABLE(TIMESTAMP)).arg("value").toStdString().c_str(), db);
+		if (RemoteTableExist(DB_TABLE(TIMESTAMP)) ==0) {
+			Info() << "On create table:"<<DB_TABLE(TIMESTAMP);
+			if (createRemoteTable(DB_TABLE(TIMESTAMP), "IDX integer default 1 not null primary key,TIME integer default 0 not null")) {
+				db_init = false;
+				return;
+			}
+			
+		}
+		timestamp = getRemoteDBtimeStamp();
+		if (RemoteSequenceExist(DB_TABLE(USER_SEQUENCE)) == 0) {
+			Info() << "On create sequence:" << DB_TABLE(USER_SEQUENCE);
+			if (createRemoteSequence(DB_TABLE(USER_SEQUENCE))) {
+				db_init = false;
+				return;
+			}
+		}
+		if (RemoteSequenceExist(DB_TABLE(USER_GROUP_SEQUENCE)) == 0) {
+			Info() << "On create sequence:" << DB_TABLE(USER_GROUP_SEQUENCE);
+			if (createRemoteSequence(DB_TABLE(USER_GROUP_SEQUENCE))) {
+				db_init = false;
+				return;
+			}
+		}
+		if (RemoteSequenceExist(DB_TABLE(FEATURE_SEQUENCE)) == 0) {
+			Info() << "On create sequence:" << DB_TABLE(FEATURE_SEQUENCE);
+			if (createRemoteSequence(DB_TABLE(FEATURE_SEQUENCE))) {
+				db_init = false;
+				return;
+			}
+		}
+		if (RemoteTableExist(DB_TABLE(RECODE))==0) {
+			Info() << "On create table:" << DB_TABLE(RECODE);
+			if (createRemoteTable(DB_TABLE(RECODE), "ID INTEGER default 0 not null,TIME integer default 0 not null,USER_ID varchar2(128) default '' not null,GROUP_ID varchar2(128) default '' not null, OPER integer default 0 not null")) {
+				db_init = false;
+				return;
+			}
+			
+		}
+		if (RemoteTableExist(DB_TABLE(FEATURE)) == 0) {
+			Info() << "On create table:" << DB_TABLE(FEATURE);
+			if (createRemoteTable(DB_TABLE(FEATURE), "ID INTEGER PRIMARY KEY,FACE_TOKEN VARCHAR(128) DEFAULT '' NOT NULL,GROUP_ID VARCHAR(128) DEFAULT '' NOT NULL,USER_ID VARCHAR(128) DEFAULT '' NOT NULL, FEATURE CLOB DEFAULT '' NOT NULL,FACE_ID INTEGER DEFAULT 0 NOT NULL,CREATE_TIME INTEGER DEFAULT 0 NOT NULL,UPDATE_TIME INTEGER DEFAULT 0 NOT NULL")) {
+				db_init = false;
+				return;
+			}
+		}
+		
+		if (RemoteTableExist(DB_TABLE(USER))==0) {
+			Info() << "On create table:" << DB_TABLE(USER);
+			if (createRemoteTable(DB_TABLE(USER), "ID INTEGER PRIMARY KEY,USER_ID VARCHAR(128) DEFAULT '' NOT NULL,	GROUP_ID VARCHAR(128) DEFAULT '' NOT NULL,USER_INFO VARCHAR(256) DEFAULT '' NOT NULL, CREATE_TIME INTEGER DEFAULT 0 NOT NULL,UPDATE_TIME INTEGER DEFAULT 0 NOT NULL")) {
+				db_init = false;
+				return;
+			}
+		}
+		if (RemoteTableExist(DB_TABLE(USER_GROUP)) == 0) {
+			Info() << "On create table:" << DB_TABLE(USER_GROUP);
+			if (createRemoteTable(DB_TABLE(USER_GROUP), "ID INTEGER PRIMARY KEY,GROUP_ID VARCHAR(128) DEFAULT '' NOT NULL, CREATE_TIME INTEGER DEFAULT 0 NOT NULL,UPDATE_TIME INTEGER DEFAULT 0 NOT NULL")) {
+				db_init = false;
+				return;
+			}
 		}
 	}
 	catch (otl_exception &p) {
-		qDebug() << p.msg << endl; // print out error message
-		qDebug() << p.stm_text << endl; // print out SQL that caused the error
-		qDebug() << p.var_info << endl; // print out the variable that caused the error
-		throw std::exception("connect to  oracle failed!");
+		Critical()<<(char*)p.msg<< "On query: "<<(char*)p.stm_text<< "Cause by "<<p.var_info;  // print out error message
+		db_init = false;
+		return;
 	}
-
+	switch (LocalTableExist(TABLE(TIMESTAMP))) {
+		case 0:
+			Debug() << "on create " << TABLE(TIMESTAMP);
+			if (createLocalTable(TABLE(TIMESTAMP), "IDX integer default 1 not null primary key,TIME integer default 0 not null") != SQLITE_OK) {
+				Critical() << sqlite.ErrMsg();	
+				db_init = false;
+				return;
+			}
+			else {
+				if (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(TIMESTAMP), "IDX,TIME"), "1,0", "") != SQLITE_OK) {
+					Critical() << sqlite.ErrMsg();
+					db_init = false;
+					return;
+				}
+			}
+			break;
+		case 1:
+			break;
+		default:
+			Critical() << "TOO much table TIMESTAMP in sqlite";
+			db_init = false;
+			return;
+		}
+		sqlitetimestamp =getLocalDBTimeStamp();
+		db_init = true;
+		Info() << "DB Initialize successfully";
 }
 //对百度人脸识别的相关设置
 

@@ -32,8 +32,7 @@ public slots:
 	void fileItemClicked(QTreeWidgetItem *item,int column);
 	void fileItemClickedDB(QTreeWidgetItem *item, int column);
 	void LoadFaceDB();//创建人脸库读取窗口
-	void LoadFaceDBProcess(QString dirname ,QString group);
-	void ProcessEnd(ItemThreadAction*);
+	void LoadFaceDBProcess(QString dirname, QString group);
 	void openFaceRepoDir();
 	void groupDelete();
 	void updateCurrentPathDB();

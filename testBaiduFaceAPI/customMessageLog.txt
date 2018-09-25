@@ -1,0 +1,7 @@
+2018-02-20 09:2i:44	Warning: libpng warning: iCCP: known incorrect sRGB profile. In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:44	Warning: libpng warning: iCCP: known incorrect sRGB profile. In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:44	Warning: libpng warning: iCCP: known incorrect sRGB profile. In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:44	Warning: libpng warning: iCCP: known incorrect sRGB profile. In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:44	Warning: libpng warning: iCCP: known incorrect sRGB profile. In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:44	Critical: "Sqlite database db/face.db open Failed, Error No: 14 ,ERROR MSG: unable to open database file". In FILE"", FUNCTION , LINE0
+2018-02-20 09:2i:46	Warning: QObject::~QObject: Timers cannot be stopped from another thread. In FILE"", FUNCTION , LINE0

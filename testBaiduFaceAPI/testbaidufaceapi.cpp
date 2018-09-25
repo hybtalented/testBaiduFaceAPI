@@ -3,7 +3,7 @@
 #include<qmessagebox.h>
 #include<qgraphicsitem.h>
 #include<qsettings.h>
-#include<qdebug.h>
+#include"mydebug.h"
 #include<qdir.h>
 #include"FaceServerThread.h"
 QPen testBaiduFaceAPI::penlist[testBaiduFaceAPI::maxDetectFace] = {
@@ -41,11 +41,17 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 	tasksbar->show();
 	switchToManageMode(false);
 	FaceServerThread* sthread = new FaceServerThread(this, u8"·þÎñÆ÷", ui.filetree);
-	sthread->start();
+	sthread->Start();
 	tasksbar->addAction(sthread->getAction());
-	connect(sthread, SIGNAL(processEnded(ItemThreadAction*)), this, SLOT(ProcessEnd(ItemThreadAction*)));
+	connect(sthread, SIGNAL(finished()), sthread, SLOT(deleteLater()));
 	connect(sthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
-	connect(this, SIGNAL(destroyed()), sthread, SLOT(terminate()));
+	connect(this, SIGNAL(destroyed()), sthread, SLOT(stop()));
+	SyncDataBase* syncthread = new SyncDataBase(ui.filetree);
+	syncthread->Start();
+	tasksbar->addAction(syncthread->getAction());
+	connect(syncthread, SIGNAL(finished()), syncthread, SLOT(deleteLater()));
+	connect(syncthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
+	connect(this, SIGNAL(destroyed()), syncthread, SLOT(stop()));
 }
 testBaiduFaceAPI::~testBaiduFaceAPI() {
 	QSettings setting("setting.ini", QSettings::Format::NativeFormat, this);
@@ -146,7 +152,7 @@ void testBaiduFaceAPI::updateCurrentPath() {
 
 void testBaiduFaceAPI::switchToManageMode(bool manage,bool updatewindow)
 {
-	qDebug() << "setDB is " << setDB<<"manage is "<<manage;
+	Debug() << "setDB is " << setDB<<"manage is "<<manage;
 	if (manage) {
 		if (!setDB) {
 			setDB = true;

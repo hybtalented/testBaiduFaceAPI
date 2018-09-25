@@ -1,13 +1,24 @@
 #include "ItemThread.h"
 #include<qtimer.h>
-ItemThread::ItemThread(QWidget*parent, QString n) :  QThread(parent),sec(0), min(0), hour(0),name(n)
+ItemThread::ItemThread(QWidget*parent, QString n) :  QThread(parent),sec(0), min(0), hour(0),name(n), isStop(false)
 {
 	act = new ItemThreadAction(this);
 	timer = new QTimer(this);
 	setActionText();
 	timer->start(1000);
 	connect(timer, SIGNAL(timeout()), this, SLOT(slotTimeout()));
-	connect(this, SIGNAL(finished()), this, SLOT(processEnd()));
+}
+void ItemThread::stop()
+{
+	QMutexLocker locker(&mutex);
+	isStop = true;
+}
+
+void ItemThread::Start()
+{
+	QMutexLocker locker(&mutex);
+	isStop = false;
+	start();
 }
 void ItemThread::slotTimeout()
 {
@@ -20,6 +31,7 @@ void ItemThread::slotTimeout()
 	}
 	setActionText();
 }
+
 
 ItemThreadAction::ItemThreadAction(ItemThread * parent, const QString & p):QAction(p,parent)
 {

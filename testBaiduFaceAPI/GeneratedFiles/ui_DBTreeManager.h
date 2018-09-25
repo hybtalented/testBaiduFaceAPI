@@ -17,6 +17,7 @@
 #include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
+#include <QtWidgets/QProgressBar>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QTreeWidget>
 #include <QtWidgets/QVBoxLayout>
@@ -38,6 +39,7 @@ public:
     QPushButton *pushButton_2;
     QLineEdit *lineEdit_3;
     QTreeWidget *filetree;
+    QProgressBar *syncProgress;
 
     void setupUi(QWidget *DBManager)
     {
@@ -107,6 +109,16 @@ public:
 
         verticalLayout->addWidget(filetree);
 
+        syncProgress = new QProgressBar(DBManager);
+        syncProgress->setObjectName(QStringLiteral("syncProgress"));
+        syncProgress->setMaximum(100);
+        syncProgress->setValue(100);
+        syncProgress->setAlignment(Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter);
+        syncProgress->setInvertedAppearance(false);
+        syncProgress->setTextDirection(QProgressBar::TopToBottom);
+
+        verticalLayout->addWidget(syncProgress);
+
 
         retranslateUi(DBManager);
 
@@ -124,6 +136,7 @@ public:
         QTreeWidgetItem *___qtreewidgetitem = filetree->headerItem();
         ___qtreewidgetitem->setText(2, QApplication::translate("DBManager", "\346\240\207\350\257\206\347\254\246", Q_NULLPTR));
         ___qtreewidgetitem->setText(1, QApplication::translate("DBManager", "\347\261\273\345\236\213", Q_NULLPTR));
+        syncProgress->setFormat(QApplication::translate("DBManager", "\345\220\214\346\255\245-%p%", Q_NULLPTR));
     } // retranslateUi
 
 };

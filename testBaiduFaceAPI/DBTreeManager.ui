@@ -95,6 +95,28 @@
      </column>
     </widget>
    </item>
+   <item>
+    <widget class="QProgressBar" name="syncProgress">
+     <property name="maximum">
+      <number>100</number>
+     </property>
+     <property name="value">
+      <number>100</number>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+     <property name="invertedAppearance">
+      <bool>false</bool>
+     </property>
+     <property name="textDirection">
+      <enum>QProgressBar::TopToBottom</enum>
+     </property>
+     <property name="format">
+      <string>同步-%p%</string>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <resources>

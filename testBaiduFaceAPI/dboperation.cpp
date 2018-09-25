@@ -1,7 +1,7 @@
 #include"testbaidufaceapi.h"
 #include"createFaceDB.h"
 #include"loadFaceDB.h"
-#include<qdebug.h>
+#include"mydebug.h"
 #include<qdir.h>
 #include<qmessagebox.h>
 #include<json/json.h>
@@ -39,14 +39,9 @@ void testBaiduFaceAPI::LoadFaceDBProcess(QString dirname, QString group)
 	}
 	createFaceDB * cdb = new createFaceDB(dirname, group, ui.filetree);
 	tasksbar->addAction(cdb->getAction());
-	connect(cdb, SIGNAL(processEnded(createFaceDBAction*)), this, SLOT(ProcessEnd(createFaceDBAction*)));
 	connect(cdb, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
 	connect(this, SIGNAL(destroyed()), cdb, SLOT(terminate()));
-}
-void testBaiduFaceAPI::ProcessEnd(ItemThreadAction*action) {
-
-	tasksbar->removeAction(action);
-	delete action->Parent();
+	connect(cdb, SIGNAL(finished()), cdb, SLOT(deleteLater()));
 }
 void testBaiduFaceAPI::recvMessage(QString title, QString msg, QString button) {
 	QMessageBox::information(this, title, msg, button);
