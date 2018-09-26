@@ -8,6 +8,8 @@
 
 class createFaceDB;
 class ItemThreadAction;
+class SyncDataBase;
+class FaceServerThread;
 class testBaiduFaceAPI : public QMainWindow
 {
 	Q_OBJECT
@@ -44,7 +46,8 @@ private:
 	void addItem(QTreeWidget * filetree, QString file);
 	void updateTreeDB(QTreeWidgetItem*,QStringList dbgroup, QStringList person=QStringList());
 	void updateCurrentPath();
-
+	SyncDataBase* syncthread;
+	FaceServerThread* sthread;
 	Setting settings;
 	QToolBar* tasksbar;
 	void setTools();

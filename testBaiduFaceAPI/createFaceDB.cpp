@@ -33,6 +33,7 @@ void createFaceDB::run()
 	int err =createGroup(group.toStdString().c_str());
 	if (err) {
 		sendMessage(u8"群组创建失败", QString("群组<font color=green>%1</font>创建失败，失败码为<font color=red>%2</font>").arg(group, err),u8"了解");
+		return;
 	}
 	for (auto it : dir.entryList(QDir::Filter::AllDirs, QDir::Name)) {
 		QDir persondir = dirname + '/' + it;
@@ -40,30 +41,30 @@ void createFaceDB::run()
 		int picperson = 0;
 
 		//开始读取一个人的人脸
-		Info() << QString(u8"    正在录入%1的%2张人脸").arg(it).arg(personpics.count());
+		Debug() << QString(u8"    正在录入%1的%2张人脸").arg(it).arg(personpics.count());
 		for (auto pic : personpics) {
 			Debug() << QString(u8"        正在录入人脸%1...").arg(pic);
 			int err = loadOneFace(it.toStdString().c_str(), group.toStdString().c_str(), (dirname + '/' + it + '/' + pic).toStdString().c_str(),pic.toStdString().c_str());
 			switch (err ) {
 			case 0:
-				Info() << QString(u8"        人脸%1录入成功, 总共已经录入%2张人脸！").arg(pic).arg(++successfile);
+				Debug() << QString(u8"        人脸%1录入成功, 总共已经录入%2张人脸！").arg(pic).arg(++successfile);
 				++picperson;
 				break;
 			case 1006:
-				Info() << QString(u8"        人脸%1录入失败, 人脸已经在库中！").arg(pic);
+				Debug() << QString(u8"        人脸%1录入失败, 人脸已经在库中！").arg(pic);
 				++fileAlearyIn;
 				break;
 			default:
-				Info() << QString(u8"        人脸%1录入失败, 失败代码：%2").arg(pic).arg(err);
+				Debug() << QString(u8"        人脸%1录入失败, 失败代码：%2").arg(pic).arg(err);
 				break;
 			}
 			++filenum;
 		}
 		if (picperson) {
-			Info() << QString(u8"    %2张人脸录入成功！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
+			Debug() << QString(u8"    %2张人脸录入成功！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
 		}
 		else {
-			Info() << QString(u8"    人脸库里人脸读取失败！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
+			Debug() << QString(u8"    人脸库里人脸读取失败！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
 		}
 
 	}

@@ -61,7 +61,7 @@ struct Setting {
 #define TABLE(table) #table
 #define CREATESEQUENCESTR "create sequence %1 %2"
 #define CREATETABLESTR "create table %1 (%2) %3"
-
+#define DELETESTR "delete from %1 %2"
 #define SELECTSTR  "select %1 from %2 %3"
 #define  INSERTSTR  "insert into %1 values (%2) %3"
 #define UPDATESTR  "update %1 set %2 %3"
@@ -71,6 +71,9 @@ struct Setting {
 #define ALTMODIFY "modify"
 #define ALTRENAME "rename"
 #define ALTRENAMETO "rename to"
+
+
+
 
 class DBTreeManager :
 	public QWidget
@@ -87,6 +90,9 @@ public:
 	void setSetting(Setting&setting);
 	// 对应节点被点击后的动作
 	void itemClicked(QTreeWidgetItem *item, int column);
+	/*  
+	百度人脸库的相关操作
+	*/
 	// 读取群组列表
 	QStringList ReadGroup();
 	// 读取用户列表 
@@ -102,13 +108,14 @@ public:
 	QString CompareBase64(const char*, const char*);
 	// 图片与人类库比较
 	QString CompareWithGroup(const char*imgbase64, const char*group,const char* user=nullptr);
-	void deleteGroup(const char*groupname);
-	void deleteUser(const char*groupname,const char*username);
+	const char* deleteGroup(const char*groupname);
+	const char* deleteUser(const char*groupname,const char*username);
 	int createFace(const char*user, const char* group, const char* filepath, const char* filename);
 	int createGroup(const char*groupname);
 	void expandItem(QTreeWidgetItem*);
 	// 将对应节点展开
 	bool groupExist(const QString& str);
+	bool userExist(const QString&group,const QString&user);
 	QMenu* menu() { return m_menu; }
 	BaiduFaceApi* BaiduApi() { return baiduApi; }
 	Ui::DBManager& UI() { return ui; }
@@ -141,12 +148,16 @@ public:
 	{
 		user=0x1,group=0x2,feature=0x4,del=0x8,ins=0x10,upd=0x20,table=user|group|feature,oper=del|ins|upd
 	};
-	bool addRemoteDBRECODE(qint64 id, qint64 time, const char * user, const char* group, RECODE_OPER oper);
+	inline const char* RECODE(qint64 id, RECODE_OPER table) { return FORMAT_2("where ID=%1 and BITAND(OPER,%2)=%2 ", id, table); }
+	bool addRemoteDBRECODE(qint64 id, qint64 time, int oper);
+	bool findRECODE(qint64 id, RECODE_OPER table);
 	SQLITE_RET selectLocalDB(const char* content, const char* table, const char* addtion_option);
 	int insertLocalDB(const char* table, const char* content, const char*addtion_option);
 	int insertRemoteDB( const char* table,  const char* content, const char*addtion_option);
 	int updateLocalDB(const char* table, const char* columns, const char*addtion_option);
 	int updateRemoteDB( const char* table, const char* columns, const char*addtion_option);
+	int deleteLocalDB(const char* table, const char*addtion_option);
+	int deleteRemoteDB(const char* table, const char*addtion_option);
 	int alterLocalDB( const char* table, const char* option, const char*content);
 	int alterRemoteDB( const char* table, const char* option, const char*content);
 	int createLocalTable(const char* table, const char*coldefs, const char*addtion_option=0);
@@ -192,6 +203,7 @@ private:
 	Ui::DBManager ui;
 	otl_connect db;
 	SQLite sqlite;
+	QMutex dbmutex;
 };
 void deleteDir(const QString& dirname);
 void deleteFile(const QString& filename);

@@ -40,13 +40,13 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 	statusBar()->addWidget(tasksbar);
 	tasksbar->show();
 	switchToManageMode(false);
-	FaceServerThread* sthread = new FaceServerThread(this, u8"服务器", ui.filetree);
+	sthread = new FaceServerThread(this, u8"服务器", ui.filetree);
 	sthread->Start();
 	tasksbar->addAction(sthread->getAction());
 	connect(sthread, SIGNAL(finished()), sthread, SLOT(deleteLater()));
 	connect(sthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
 	connect(this, SIGNAL(destroyed()), sthread, SLOT(stop()));
-	SyncDataBase* syncthread = new SyncDataBase(ui.filetree);
+	syncthread = new SyncDataBase(ui.filetree);
 	syncthread->Start();
 	tasksbar->addAction(syncthread->getAction());
 	connect(syncthread, SIGNAL(finished()), syncthread, SLOT(deleteLater()));
@@ -56,6 +56,8 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 testBaiduFaceAPI::~testBaiduFaceAPI() {
 	QSettings setting("setting.ini", QSettings::Format::NativeFormat, this);
 	setting.setValue("current path", QVariant(ui.filetree->UI().lineEdit->text())) ;
+	sthread->requestInterruption();
+	syncthread->requestInterruption();
 }
 void testBaiduFaceAPI::setTools() {
 	QActionGroup *lockgroup=new QActionGroup(this);

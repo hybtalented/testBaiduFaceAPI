@@ -122,26 +122,26 @@ void FaceSocket::RecvData() {
 			}
 			else if (value["cmd"].asString() == "getUserInfo") {
 				if (value["group"].isString()&& value["user"].isString()) {
-					Json::Value root,subroot;
-					root["group"] = value["group"];
-					root["user"] = value["user"];
 					std::string userinfo = mgr->ReadUserInfo(value["group"].asCString(), value["user"].asCString());
-					reader.parse(userinfo, subroot);
-					root["userinfo"] = subroot["data"]["result"];
-					root["errno"] = subroot["errno"];
-					root["msg"] = subroot["msg"];
-					this << QString(root.toStyledString().c_str());
+					this << QString(userinfo.c_str());
 				}
 			}
 			else if (value["cmd"].asString() == "GroupAdd") {
 				if (value["group"].isString()) {
-					Json::Value root, subroot;
-					root["cmd"] = "GroupAdd";
-					std::string userinfo = mgr->AddGroup(value["group"].asCString());
-					reader.parse(userinfo, subroot);
-					root["errno"] = subroot["errno"];
-					root["msg"] = subroot["msg"];
-					this << QString(root.toStyledString().c_str());
+					QString userinfo = mgr->AddGroup(value["group"].asCString());
+					this << userinfo;
+				}
+			}
+			else if (value["cmd"].asString() == "UserAdd") {
+				if (value["group"].isString()) {
+					QString userinfo = mgr->AddUser(value["group"].asCString(),value["user"].asCString(),value["pic1"].asCString(),0);
+					this << userinfo;
+				}
+			}
+			else if (value["cmd"].asString() == "GroupDel") {
+				if (value["group"].isString()) {
+					QString userinfo = mgr->deleteGroup(value["group"].asCString());
+					this << userinfo;
 				}
 			}
 		}
@@ -177,7 +177,7 @@ SyncDataBase::SyncDataBase(DBTreeManager*parent) :ItemThread(parent, u8"Êý¾Ý¿âÍ¬
 void SyncDataBase::run()
 {
 	DBTreeManager * manager = qobject_cast<DBTreeManager *>(parent());
-	while (1) {
+	while (!isInterruptionRequested()) {
 		if (!manager||!manager->DBInitialized()) {
 			Critical() << "parent is not a DBTreeManager or Database not initialized!";
 			return;

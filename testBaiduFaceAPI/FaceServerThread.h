@@ -51,7 +51,7 @@ public:
 	FaceServerThread(QWidget*parent,const QString& name,DBTreeManager*);
 	~FaceServerThread();
 	void run()override {
-		while (1) {
+		while (!isInterruptionRequested()) {
 			if (haveStop()) {
 				return;
 			}
