@@ -23,7 +23,7 @@ public:;
 	ItemThread(QWidget*parent, QString n);
 	QAction* getAction() { return act; }
 	bool haveStop() { QMutexLocker locker(&mutex); return isStop; }
-	~ItemThread() {}
+	~ItemThread();
 public slots:
 	void stop();
 	void Start();

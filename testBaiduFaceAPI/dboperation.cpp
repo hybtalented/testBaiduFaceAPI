@@ -40,7 +40,7 @@ void testBaiduFaceAPI::LoadFaceDBProcess(QString dirname, QString group)
 	createFaceDB * cdb = new createFaceDB(dirname, group, ui.filetree);
 	tasksbar->addAction(cdb->getAction());
 	connect(cdb, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
-	connect(this, SIGNAL(destroyed()), cdb, SLOT(terminate()));
+	connect(this, SIGNAL(destroyed()), cdb, SLOT(stop()));
 	connect(cdb, SIGNAL(finished()), cdb, SLOT(deleteLater()));
 }
 void testBaiduFaceAPI::recvMessage(QString title, QString msg, QString button) {

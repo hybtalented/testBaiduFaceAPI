@@ -8,10 +8,14 @@ ItemThread::ItemThread(QWidget*parent, QString n) :  QThread(parent),sec(0), min
 	timer->start(1000);
 	connect(timer, SIGNAL(timeout()), this, SLOT(slotTimeout()));
 }
+ItemThread::~ItemThread() {
+	timer->stop();
+}
 void ItemThread::stop()
 {
 	QMutexLocker locker(&mutex);
 	isStop = true;
+	requestInterruption();
 }
 
 void ItemThread::Start()

@@ -184,10 +184,7 @@ void SyncDataBase::run()
 		}
 		isSync = true;
 		manager->synchronization(manager->getLocalDBTimeStamp(), manager->getRemoteDBtimeStamp());
-		{
-			if (haveStop()) return;
-		}
 		isSync = false;
-		Sleep(15000);
+		msleep(15000);
 	}
 }

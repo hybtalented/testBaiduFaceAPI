@@ -4,14 +4,14 @@
 #include<qfile.h>
 #include<qdatetime.h>
 #include<qmutex.h>
-QFile outputFile("customMessageLog.txt");
+QFile outputFile("customMessageLog.log");
 QTextStream textStream(&outputFile);
 void customMessageHandler(QtMsgType type,const QMessageLogContext&context, const QString& msg)
 {
 	static QMutex mutex;
 	QString txtMessage;
 	QDateTime time = QDateTime::currentDateTime();
-	txtMessage=time.toString(u8"yyyy-MM-dd HH:mm:ss\t");
+	txtMessage=time.toString(u8"yyyy-MM-dd HH:mm:ss.zzz\t");
 	txtMessage += QString("Thread id: %1 ").arg(__threadid());
 	switch (type)
 	{
@@ -34,7 +34,7 @@ void customMessageHandler(QtMsgType type,const QMessageLogContext&context, const
 	//保存输出相关信息到指定文件
 	
 	mutex.lock();
-	textStream << qPrintable(txtMessage) << endl;
+	textStream << txtMessage.toUtf8().constData() << endl;
 	textStream.flush();
 	mutex.unlock();
 }

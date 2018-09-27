@@ -8,7 +8,7 @@
 
 using namespace Json;
 
-DBTreeManager::DBTreeManager(QWidget*parent)throw(std::exception) :QWidget(parent), m_menu(nullptr), sqlite(face_db_addr), db_init(false)
+DBTreeManager::DBTreeManager(QWidget*parent)throw(std::exception) :QWidget(parent), m_menu(nullptr), sqlite(face_db_addr), db_init(false),dbmutex(QMutex::Recursive)
 {
 	if (sqlite.Result()) {
 		QMessageBox::critical(this, u8"打开本地人脸库失败", QString(u8"错误代码:<font color=red> %1 </font>. 错误信息: <font color=red> %2 </font>").arg(sqlite.Result()).arg(sqlite.DB_STATUS()),u8"&退出程序");
@@ -106,54 +106,69 @@ const char* DBTreeManager::ReadUserInfo(const char* group, const char* user) {
 }
 const char * DBTreeManager::AddGroup(const char * group)
 {
-	qint64 time = getCurrentTimeStamp();
-	sqlite.lock();
-	std::string ret = baiduApi->group_add(group);
-	sqlite.unLock();
 	Json::Value value;
-	reader.parse(ret, value);
-	if (value["errno"].asInt() == 0) {
+	qint64 time = getCurrentTimeStamp();
+	if (!groupExist(group)) {
 		qint64 gid = getSequenceVal(DB_TABLE(USER_GROUP_SEQUENCE));
 		addRemoteDBUSER_GROUP(gid, group, time);
-		updateLocalDB(TABLE(USER_GROUP), FORMAT_2("ID=%1,CREATE_TIME=%2", gid, time), FORMAT_1("where GROUP_ID='%1'", group));
+		addLocalDBUSER_GROUP(gid, group, time);
 	}
-	return ret.c_str();
+
+	value["errno"] = 0;
+	return value.toStyledString().c_str();
 }
 const char * DBTreeManager::AddUser(const char * group, const char * user,const char* img,  const char* user_info)
 {
 	qint64 time=getCurrentTimeStamp();
-	bool groupexist = groupExist(group), userexist = userExist(group, user);
-	sqlite.lock();
-	std::string ret= baiduApi->user_add(user, group, img, 1, user_info);
-	sqlite.unLock();
+	const float * f2;
 	Json::Value value;
-	reader.parse(ret, value);
-	if (value["errno"].asInt() == 0 ) {
-		if (!groupexist) {
+	QDateTime timestart= QDateTime::currentDateTime();
+	int len; QByteArray facefeature;
+	{
+		QMutexLocker locker(&baiduMutex);
+		len = baiduApi->get_face_feature(img, 1, f2);
+		facefeature = QByteArray((const char*)f2, len * sizeof(float)).toBase64();
+	}
+	Debug() <<QString( "Getting feature using %1 ms").arg(timestart.msecsTo(QDateTime::currentDateTime()));
+	value["errno"] = len;
+	if (len == 512 ) {
+		timestart = QDateTime::currentDateTime();
+		if (!groupExist(group)) {
 			qint64 gid = getSequenceVal(DB_TABLE(USER_GROUP_SEQUENCE));
 			addRemoteDBUSER_GROUP(gid, group, time);
-			updateLocalDB(TABLE(USER_GROUP), FORMAT_2("ID=%1,CREATE_TIME=%2", gid,time),FORMAT_1("where GROUP_ID='%1'",group));
+			addLocalDBUSER_GROUP(gid, group, time);
 		}
-		if (!userexist) {
+		if (!userExist(group, user)) {
 			qint64 uid = getSequenceVal(DB_TABLE(USER_SEQUENCE));
 			addRemoteDBUSER(uid, user, group, user_info, time);
-			updateLocalDB(TABLE(USER), FORMAT_2("ID=%1,CREATE_TIME=%2", uid, time), FORMAT_2("where GROUP_ID='%1' and USER_ID='%2'", group,user));
+			addLocalDBUSER(uid, user, group, user_info, time);
 		}
-		std::string face_token = value["data"]["face_token"].asString();
-		SQLITE_RET ret = selectLocalDB("FEATURE", TABLE(FEATURE), FORMAT_3("where GROUP_ID='%1' and USER_ID='%2' and face_token='%3'", group, user, face_token.c_str()));
-		if (ret.rows >= 1) {
+		Debug() << QString("Adding  into group and user using %1 ms").arg(timestart.msecsTo(QDateTime::currentDateTime()));
+		timestart = QDateTime::currentDateTime();
+		std::string face_token = getFaceToken(img);
+		Debug() << QString("Get Face Token using %1 ms").arg(timestart.msecsTo(QDateTime::currentDateTime()));
+		timestart = QDateTime::currentDateTime();
+		if (!featureExist(group, user, face_token.c_str())) {
+			value["data"]["face_token"] = face_token;
+			value["errno"] = 0;
 			qint64 fid = getSequenceVal(DB_TABLE(FEATURE_SEQUENCE));
-			addRemoteDBFEATURE(fid, face_token.c_str(), group, user, ret.getCString(0,"FEATURE"), time);
-			updateLocalDB(TABLE(FEATURE), FORMAT_2("ID=%1,CREATE_TIME=%2", fid, time), FORMAT_3("where GROUP_ID='%1' and USER_ID='%2' and face_token='%3'", group, user, face_token.c_str()));
-			updateLocalDB(TABLE(TIMESTAMP), FORMAT_1("TIME=%1", time), "where IDX=1");
-			if(ret.rows>1)
-			    Warning() << QString("Too many rows(%1) getted when add picture to user %2 in group %3").arg(ret.rows).arg(user).arg(group);	
+			addRemoteDBFEATURE(fid, face_token.c_str(), group, user, facefeature.constData(), time);
+			addLocalDBFEATURE(fid, face_token.c_str(), group, user, facefeature.constData(), time);
 		}
+		else {
+			value["errno"] = 1003;
+		}
+		Debug() << QString("Get Feature using %1 ms").arg(timestart.msecsTo(QDateTime::currentDateTime()));
 	}
 	else {
-		Warning() << "Failed add user " << user << "to group" << group<<"with result "<< ret.c_str();
+		Warning() << "Failed add user " << user << "to group" << group<<"with Error code "<< len;
 	}
-	return ret.c_str();
+	return value.toStyledString().c_str();
+}
+#include<qcryptographichash.h>
+const char * DBTreeManager::getFaceToken(const char * img)
+{
+	return QCryptographicHash::hash(img, QCryptographicHash::Md5).toHex().toLower().constData();
 }
 /* DBTreeManager::ReadPerson
   功能： 读取用户列表
@@ -184,8 +199,7 @@ const char* DBTreeManager::deleteGroup(const char * groupname)
 	try {
 			qint64 gid;
 			otl_stream os(1, FORMAT_3(SELECTSTR, "ID", DB_TABLE(USER_GROUP), FORMAT_1("where GROUP_ID='%1'", groupname)), db);
-			deleteRemoteDB(DB_TABLE(USER_GROUP), FORMAT_1("where GROUP_ID='%1'", groupname));
-			
+			deleteRemoteDB(DB_TABLE(USER_GROUP), FORMAT_1("where GROUP_ID='%1'", groupname));		
 			while (!os.eof()) {
 				os >> gid;
 				deleteRemoteDB(DB_TABLE(RECODE), RECODE(gid, group));
@@ -258,8 +272,9 @@ int DBTreeManager::createFace(const char * user, const char * group, const char 
 {
 	Value value;
 	QFile file(filepath);
+	file.open(QIODevice::ReadOnly);
 	qDebug() << filepath;
-	std::string res = AddUser(group, user, file.readAll().toBase64().toStdString().c_str(),parse(filename).c_str());
+	std::string res = AddUser(group, user, file.readAll().toBase64().constData(),parse(filename).c_str());
 	qDebug() << res.c_str();
 	if (reader.parse(res.c_str(), value)) {
 		if (value["errno"].isInt()) {
@@ -310,7 +325,7 @@ void DBTreeManager::expandItem(QTreeWidgetItem * item)
 }
 bool DBTreeManager::groupExist(const QString& str) {
 	SQLITE_RET ret = selectLocalDB("count(0) c", TABLE(USER_GROUP), FORMAT_1("where group_id='%1'", str));
-	if (ret.getInt(0,"c") > 0) {
+	if (ret.getInt(0,"c")!= 0) {
 		return true;
 	}
 	return false;
@@ -319,6 +334,14 @@ bool DBTreeManager::userExist(const QString & group, const QString & user)
 {
 	SQLITE_RET ret = selectLocalDB("count(0) c", TABLE(USER), FORMAT_2("where group_id='%1' and user_id='%2'", group,user));
 	if (ret.getInt(0,"c") > 0) {
+		return true;
+	}
+	return false;
+}
+bool DBTreeManager::featureExist(const QString & group, const QString & user, const QString & face_token)
+{
+	SQLITE_RET ret = selectLocalDB("count(0) c", TABLE(FEATURE), FORMAT_3("where GROUP_ID='%1' and USER_ID='%2' and FACE_TOKEN='%3'", group, user,face_token));
+	if (ret.getInt(0, "c") > 0) {
 		return true;
 	}
 	return false;
@@ -378,17 +401,21 @@ int DBTreeManager::getFileInfo(const QString &str, QString&filename, QString &fi
 qint64 DBTreeManager::getCurrentTimeStamp()
 {
 	Debug();
-	try {
-		otl_stream o(1, FORMAT_3(SELECTSTR, "TO_CHAR(LOCALTIMESTAMP(3),'yyyy-mm-dd HH24:mi:ss.ff3')", "dual", ""),db);
-		char s[100];
-		o >> s;
-		int64 a = QDateTime::fromTime_t(0).msecsTo(QDateTime::fromString(s, "yyyy-MM-dd hh:mm:ss.zzz"));
-		return a;
+	int i = 0;
+	while (i++ < REMOTERETRY) {
+		try {
+			otl_stream o(1, FORMAT_3(SELECTSTR, "TO_CHAR(LOCALTIMESTAMP(3),'yyyy-mm-dd HH24:mi:ss.ff3')", "dual", ""), db);
+			char s[100];
+			o >> s;
+			int64 a = QDateTime::fromTime_t(0).msecsTo(QDateTime::fromString(s, "yyyy-MM-dd hh:mm:ss.zzz"));
+			return a;
+		}
+		catch (otl_exception p) {
+			db_init = false;
+			Critical() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;  // print out error message
+		}
 	}
-	catch (otl_exception p) {
-		Critical() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;  // print out error message
-		return -1;
-	}
+	return -1;
 }
 qint64 DBTreeManager::getLocalDBTimeStamp()
 {
@@ -407,39 +434,44 @@ qint64 DBTreeManager::getLocalDBTimeStamp()
 }
 qint64 DBTreeManager::getRemoteDBtimeStamp()
 {
+	int i = 0;
 	Debug();
-	try {
-		otl_stream o;
-		o.open(1, FORMAT_3(SELECTSTR, "TIME", DB_TABLE(TIMESTAMP), "where IDX=1"), db);
-		if (o.eof()) {
-			insertRemoteDB(FORMAT_2("%1 (%2)",DB_TABLE(TIMESTAMP),"IDX,TIME"), "1,0","");
-			return 0;
+	while (i++ < REMOTERETRY) {
+		try {
+			otl_stream o;
+			o.open(1, FORMAT_3(SELECTSTR, "TIME", DB_TABLE(TIMESTAMP), "where IDX=1"), db);
+			if (o.eof()) {
+				insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(TIMESTAMP), "IDX,TIME"), "1,0", "");
+				return 0;
+			}
+			OTL_BIGINT time;
+			o >> time;
+			o.close();
+			return time;
 		}
-		OTL_BIGINT time;
-		o >> time;
-		o.close();
-		return time;
+		catch (otl_exception&p) {
+			Warning() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;
+		}
 	}
-	catch (otl_exception&p) {
-		Warning()<< QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;
-		db_init = false;
-		return -1;
-	}
-	
+	db_init = false;
+	return -1;
 }
 qint64 DBTreeManager::getSequenceVal(const char * sequence)
 {
-	try {
-		otl_stream o;
-		o.open(50, FORMAT_3(SELECTSTR, FORMAT_1("%1.nextval",sequence), "dual",""), db);
-		OTL_BIGINT a;
-		o >> a;
-		return a;
+	int i = 0;
+	while (i++ < REMOTERETRY) {
+		try {
+			otl_stream o;
+			o.open(50, FORMAT_3(SELECTSTR, FORMAT_1("%1.nextval", sequence), "dual", ""), db);
+			OTL_BIGINT a;
+			o >> a;
+			return a;
+		}
+		catch (otl_exception&p) {
+			Critical() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;	
+		}
 	}
-	catch (otl_exception&p) {
-		Critical() << QString::fromUtf8((char*)p.msg)  << "On query: " << p.stm_text << "Cause by " << p.var_info;
-		return -1;
-	}
+	return -1;
 }
 bool DBTreeManager::setLocalTimeStamp(qint64 timestamp)
 {
@@ -453,19 +485,21 @@ bool DBTreeManager::setLocalTimeStamp(qint64 timestamp)
 }
 bool DBTreeManager::setRemoteDBtimeStamp(qint64 timestamp)
 {
+	int i=0;
 	Debug()<< "timestamp is " << timestamp;
-	switch (updateRemoteDB(DB_TABLE(TIMESTAMP), FORMAT_1("TIME=%1", QVariant::fromValue(timestamp).toString()), "where IDX = 1")) {
-	case 0:
-		return true;
-	default:
-		return false;
+	while (i++ < REMOTERETRY) {
+		if (updateRemoteDB(DB_TABLE(TIMESTAMP), FORMAT_1("TIME=%1", QVariant::fromValue(timestamp).toString()), "where IDX = 1")==0) {
+			return true;
+		}
 	}
+	return false;
 }
 bool DBTreeManager::addLocalDBUSER(qint64 ID, const char * USER_ID, const char * GROUP_ID, const char * USER_INFO, qint64 CREATE_TIME)
 {
 	Debug() << FORMAT_4("Adding (ID:%1,USERID:%4,GROUP_ID:%2,CREATE_TIME:%3)", ID, GROUP_ID, CREATE_TIME, USER_ID);
-	switch (insertLocalDB(FORMAT_2("%1 (%2)",TABLE(USER),"ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME"), FORMAT_5("%1,'%2','%3','%4',%5 ", QVariant::fromValue(ID).toString(), USER_ID,GROUP_ID, USER_INFO,CREATE_TIME), "where IDX = 1")) {
+	switch (insertLocalDB(FORMAT_2("%1 (%2)",TABLE(USER),"ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME,UPDATE_TIME"), FORMAT_5("%1,'%2','%3','%4',%5,%5 ", QVariant::fromValue(ID).toString(), USER_ID,GROUP_ID, USER_INFO,CREATE_TIME), "")) {
 	case SQLITE_OK:
+		setLocalTimeStamp(CREATE_TIME);
 		return true;
 	default:
 		return false;
@@ -473,21 +507,23 @@ bool DBTreeManager::addLocalDBUSER(qint64 ID, const char * USER_ID, const char *
 }
 bool DBTreeManager::addRemoteDBUSER(qint64 ID, const char * USER_ID, const char * GROUP_ID, const char * USER_INFO, qint64 CREATE_TIME)
 {
-	Debug() << FORMAT_4("Adding (ID:%1,USERID:%4,GROUP_ID:%2,CREATE_TIME:%3)", ID, GROUP_ID, CREATE_TIME, USER_ID);
-	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER), "ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME,UPDATE_TIME"), FORMAT_6("%1,'%2','%3','%4',%5,%6", ID, USER_ID, GROUP_ID, USER_INFO, CREATE_TIME, CREATE_TIME), "")) {
-	case 0:
-		addRemoteDBRECODE(ID, CREATE_TIME, user | ins);
-		return true;
-	default:
-		return false;
+	int i = 0;	
+	while (i++ < REMOTERETRY) {
+		Debug() << FORMAT_5("The %5 retry to add (ID:%1,USERID:%4,GROUP_ID:%2,CREATE_TIME:%3)", ID, GROUP_ID, CREATE_TIME, USER_ID,i);
+		if (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER), "ID,USER_ID,GROUP_ID,USER_INFO,CREATE_TIME,UPDATE_TIME"), FORMAT_5("%1,'%2','%3','%4',%5,%5", ID, USER_ID, GROUP_ID, USER_INFO, CREATE_TIME), "")==0) {
+			addRemoteDBRECODE(ID, CREATE_TIME, user | ins);
+			return true;
+		}
 	}
+	return false;
 }
 
 bool DBTreeManager::addLocalDBUSER_GROUP(qint64 ID, const char * GROUP_ID, qint64 CREATE_TIME)
 {
 	Debug() << FORMAT_3("Adding group (ID:%1,GROUP_ID:%2,CREATE_TIME:%3", ID, GROUP_ID, CREATE_TIME);
-	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME"), FORMAT_3("%1,'%2',%3 ", ID,  GROUP_ID,  CREATE_TIME), "")) {
+	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME,UPDATE_TIME"), FORMAT_3("%1,'%2',%3,%3 ", ID,  GROUP_ID,  CREATE_TIME), "")) {
 	case SQLITE_OK:
+		setLocalTimeStamp(CREATE_TIME);
 		return true;
 	default:
 		return false;
@@ -495,21 +531,23 @@ bool DBTreeManager::addLocalDBUSER_GROUP(qint64 ID, const char * GROUP_ID, qint6
 }
 bool DBTreeManager::addRemoteDBUSER_GROUP(qint64 ID, const char * GROUP_ID, qint64 CREATE_TIME)
 {
-	Debug() << FORMAT_3("Adding group (ID:%1,GROUP_ID:%2,CREATE_TIME:%3", ID, GROUP_ID, CREATE_TIME);
-	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME,UPDATE_TIME"), FORMAT_3("%1,'%2',%3,%3", ID, GROUP_ID, CREATE_TIME), "")) {
-	case 0:
-		addRemoteDBRECODE(ID, CREATE_TIME, group | ins);
-		return true;
-	default:
-		return false;
+	int i = 0;
+	while(i++<REMOTERETRY){
+		Debug() << FORMAT_4("The %4 retry to add group (ID:%1,GROUP_ID:%2,CREATE_TIME:%3", ID, GROUP_ID, CREATE_TIME, i);
+		if (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(USER_GROUP), "ID,GROUP_ID,CREATE_TIME,UPDATE_TIME"), FORMAT_3("%1,'%2',%3,%3", ID, GROUP_ID, CREATE_TIME), "") == 0) {
+			addRemoteDBRECODE(ID, CREATE_TIME, group | ins);
+			return true;
+		}
 	}
+	return false;
 }
 
 bool DBTreeManager::addLocalDBFEATURE(qint64 ID, const char * FACE_TOKEN, const char * GROUP_ID, const char * USER_ID, const char * FEATURE, qint64 CREATE_TIME)
 {
 	Debug() << FORMAT_5("Adding group (ID:%1,GROUP_ID:%2,CREATE_TIME:%3,FACE_TOKEN:%4,USER_ID:%5", ID, GROUP_ID, CREATE_TIME, FACE_TOKEN, USER_ID);
-	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME"), FORMAT_6("%1,'%2','%3','%4','%5',%6", QVariant::fromValue(ID).toString(), FACE_TOKEN,GROUP_ID, USER_ID, FEATURE, CREATE_TIME), "")) {
+	switch (insertLocalDB(FORMAT_2("%1 (%2)", TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME,UPDATE_TIME"), FORMAT_6("%1,'%2','%3','%4','%5',%6,%6", QVariant::fromValue(ID).toString(), FACE_TOKEN,GROUP_ID, USER_ID, FEATURE, CREATE_TIME), "")) {
 	case SQLITE_OK:
+		setLocalTimeStamp(CREATE_TIME);
 		return true;
 	default:
 		return false;
@@ -517,65 +555,76 @@ bool DBTreeManager::addLocalDBFEATURE(qint64 ID, const char * FACE_TOKEN, const 
 }
 bool DBTreeManager::addRemoteDBFEATURE(qint64 ID, const char * FACE_TOKEN, const char * GROUP_ID, const char * USER_ID, const char * FEATURE, qint64 CREATE_TIME)
 {
-	Debug() << FORMAT_3(INSERTSTR, FORMAT_2("%1 (%2)", DB_TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME,UPDATE_TIME"), ":id<bigint>,:face_token<char[128]>,:group_id<char[128]>,:user_id<char[128]>,empty_clob(),:create_time<bigint>,:create_time", "returning FEATURE into :FEATURE<clob>");
-	try {
-		int len = strlen(FEATURE);
-		Debug() << len;
-		otl_stream o;
-		otl_long_string str(FEATURE, len + 1,len+1);
-		o.open(1, FORMAT_3(INSERTSTR, FORMAT_2("%1 (%2)", DB_TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME,UPDATE_TIME"), ":id<bigint>,:face_token<char[128]>,:group_id<char[128]>,:user_id<char[128]>,empty_clob(),:create_time<bigint>,:create_time ", "returning FEATURE into :FEATURE<clob>"), db);
-		o << ID << FACE_TOKEN << GROUP_ID << USER_ID << CREATE_TIME << str;
-		addRemoteDBRECODE(ID, CREATE_TIME, feature | ins);
-		return true;
+	int i = 0,ret=0;
+	while (i++ < REMOTERETRY) {
+		Debug() <<FORMAT_1("The %1 retry:",i)<< FORMAT_3(INSERTSTR, FORMAT_2("%1 (%2)", DB_TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME,UPDATE_TIME"), ":id<bigint>,:face_token<char[128]>,:group_id<char[128]>,:user_id<char[128]>,empty_clob(),:create_time<bigint>,:create_time", "returning FEATURE into :FEATURE<clob>");
+		try {
+			int len = strlen(FEATURE);
+			otl_long_string str(FEATURE, len + 1, len + 1);
+			{
+				QMutexLocker locker(&dbmutex);
+				otl_stream o(1, FORMAT_3(INSERTSTR, FORMAT_2("%1 (%2)", DB_TABLE(FEATURE), "ID,FACE_TOKEN,GROUP_ID,USER_ID,FEATURE,CREATE_TIME,UPDATE_TIME"), ":id<bigint>,:face_token<char[128]>,:group_id<char[128]>,:user_id<char[128]>,empty_clob(),:create_time<bigint>,:create_time ", "returning FEATURE into :FEATURE<clob>"), db);
+				o << ID << FACE_TOKEN << GROUP_ID << USER_ID << CREATE_TIME << str;
+			}
+			return true;
+		}
+		catch (otl_exception& p) {
+			Warning() << "Error Code:" << p.code << " " << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;
+		}
 	}
-	catch (otl_exception& p) {
-		Warning() << "Error Code:" << p.code << " " << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;
-		return false;
-	}	
+	return false;
 }
 bool DBTreeManager::addRemoteDBRECODE(qint64 id, qint64 time, int oper)
 {
-	switch (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(RECODE), "ID,TIME,OPER"), FORMAT_3("%1,%2,%3", id, time, oper), "")) {
-	case 0:
-		updateRemoteDB(DB_TABLE(TIMESTAMP), FORMAT_1("TIME=%1", time), "where IDX=1");
-		return true;
-	default:
-		return false;
+	int i=0;
+	while (i++ < REMOTERETRY) {
+		if (insertRemoteDB(FORMAT_2("%1 (%2)", DB_TABLE(RECODE), "ID,TIME,OPER"), FORMAT_3("%1,%2,%3", id, time, oper), "")==0) {
+			setRemoteDBtimeStamp(time);
+			return true;
+		}
 	}
+	return false;
 }
 bool DBTreeManager::findRECODE(qint64 id, RECODE_OPER table)
 {
-	try {
-		int count;
-		otl_stream o(1, FORMAT_3(SELECTSTR, "count(0)", DB_TABLE(RECODE), RECODE(id, table)), db);
-		o >> count;
-		if (count > 0)return true;
-	}
-	catch (otl_exception& p) {
-		Critical() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;  // print out error message
+	int i = 0,ret=0; 
+	while (i++ < 5) {
+		try {
+			int count;
+			QMutexLocker locker(&dbmutex);
+			otl_stream o(1, FORMAT_3(SELECTSTR, "count(0)", DB_TABLE(RECODE), RECODE(id, table)), db);
+			o >> count;
+			if (count > 0)return true;
+			else return false;
+		}
+		catch (otl_exception& p) {
+			Critical() << QString::fromUtf8((char*)p.msg) << "On query: " << p.stm_text << "Cause by " << p.var_info;  // print out error message
+		}
 	}
 	return false;
 }
 SQLITE_RET DBTreeManager::selectLocalDB(const char * content, const char * table, const char * addtion_option)
 {
+	sqlite.lock();
 	Debug() << FORMAT_3(SELECTSTR, content, table, addtion_option);
 	SQLITE_RET ret=sqlite.exec(FORMAT_3(SELECTSTR, content, table, addtion_option));
 	if (sqlite.Result() != SQLITE_OK) {
-		Info() << sqlite.ErrMsg();
+		Warning() << sqlite.ErrMsg();
 		ret.rows = 0;
 		ret.value.clear();
 	}
+	sqlite.unLock();
 	return ret;
 }
 
 
 int DBTreeManager::insertLocalDB(const char * table, const char * content, const char * addtion_option)
 {
-	Debug() << FORMAT_3(SELECTSTR, content, table, addtion_option);
+	Debug() << FORMAT_3(INSERTSTR, table, content, addtion_option);
 	sqlite.lock();
 	SQLITE_RET ret = sqlite.exec(FORMAT_3(INSERTSTR, table, content, addtion_option));
 	if (sqlite.Result() != SQLITE_OK) {
-		Info() << sqlite.ErrMsg();
+		Warning() << sqlite.ErrMsg();
 	}
 	sqlite.unLock();
 	return sqlite.Result();
@@ -876,7 +925,11 @@ void DBTreeManager::delelteSelection() {
 }
 void DBTreeManager::synchronization(qint64 local, qint64 remote)
 {
-    if (local < remote) {
+	if (!DBInitialized())
+	{
+		initDB();
+	}
+	if (local < remote) {
 		emit setPrograssRange(0, 0);
 	}
 }
@@ -950,7 +1003,7 @@ void DBTreeManager::initDB()
 				return;
 			}
 		}
-		
+
 		if (RemoteTableExist(DB_TABLE(USER))==0) {
 			Info() << "On create table:" << DB_TABLE(USER);
 			if (createRemoteTable(DB_TABLE(USER), "ID INTEGER default 0 primary key,USER_ID VARCHAR(128) DEFAULT '' NOT NULL,	GROUP_ID VARCHAR(128) DEFAULT '' NOT NULL,USER_INFO VARCHAR(256) DEFAULT '', CREATE_TIME INTEGER DEFAULT 0 NOT NULL,UPDATE_TIME INTEGER DEFAULT 0 NOT NULL")) {

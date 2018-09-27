@@ -72,9 +72,7 @@ struct Setting {
 #define ALTRENAME "rename"
 #define ALTRENAMETO "rename to"
 
-
-
-
+#define REMOTERETRY 5
 class DBTreeManager :
 	public QWidget
 {
@@ -103,7 +101,8 @@ public:
 	const char* AddGroup(const char* group);
 	// 增加用户
 	const char* AddUser(const char* group,const char* user, const char* img, const char* user_info);
-
+	// 获得人脸图片唯一标识符
+	const char* getFaceToken(const char* img);
 	// 比对两张Base64的图片
 	QString CompareBase64(const char*, const char*);
 	// 图片与人类库比较
@@ -116,6 +115,7 @@ public:
 	// 将对应节点展开
 	bool groupExist(const QString& str);
 	bool userExist(const QString&group,const QString&user);
+	bool featureExist(const QString&group, const QString&user,const QString &feature);
 	QMenu* menu() { return m_menu; }
 	BaiduFaceApi* BaiduApi() { return baiduApi; }
 	Ui::DBManager& UI() { return ui; }
@@ -148,7 +148,7 @@ public:
 	{
 		user=0x1,group=0x2,feature=0x4,del=0x8,ins=0x10,upd=0x20,table=user|group|feature,oper=del|ins|upd
 	};
-	inline const char* RECODE(qint64 id, RECODE_OPER table) { return FORMAT_2("where ID=%1 and BITAND(OPER,%2)=%2 ", id, table); }
+	#define RECODE(id,table) FORMAT_2("where ID=%1 and BITAND(OPER,%2)=%2 ", id, table)
 	bool addRemoteDBRECODE(qint64 id, qint64 time, int oper);
 	bool findRECODE(qint64 id, RECODE_OPER table);
 	SQLITE_RET selectLocalDB(const char* content, const char* table, const char* addtion_option);
@@ -204,6 +204,7 @@ private:
 	otl_connect db;
 	SQLite sqlite;
 	QMutex dbmutex;
+	QMutex baiduMutex;
 };
 void deleteDir(const QString& dirname);
 void deleteFile(const QString& filename);

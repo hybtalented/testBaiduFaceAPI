@@ -52,10 +52,7 @@ public:
 	~FaceServerThread();
 	void run()override {
 		while (!isInterruptionRequested()) {
-			if (haveStop()) {
-				return;
-			}
-			sleep(1000);
+			msleep(5000);
 		}
 	}
 private:

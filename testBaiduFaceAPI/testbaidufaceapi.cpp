@@ -25,6 +25,7 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 	ui.filetree->UI().lineEdit->setText(setting.value("current path", QVariant(".")).toString());
 	setTools();
 	readSetting();
+	ui.filetree->setSetting(settings);
 	bool authed = ui.filetree->BaiduApi()->is_auth();
 	if (authed) {
 		ui.statusBar->showMessage(u8"百度离线人脸识别库，鉴权成功！",3000);
@@ -43,21 +44,23 @@ testBaiduFaceAPI::testBaiduFaceAPI(QWidget *parent)
 	sthread = new FaceServerThread(this, u8"服务器", ui.filetree);
 	sthread->Start();
 	tasksbar->addAction(sthread->getAction());
-	connect(sthread, SIGNAL(finished()), sthread, SLOT(deleteLater()));
 	connect(sthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
-	connect(this, SIGNAL(destroyed()), sthread, SLOT(stop()));
 	syncthread = new SyncDataBase(ui.filetree);
 	syncthread->Start();
 	tasksbar->addAction(syncthread->getAction());
-	connect(syncthread, SIGNAL(finished()), syncthread, SLOT(deleteLater()));
 	connect(syncthread, SIGNAL(sendMessage(QString, QString, QString)), this, SLOT(recvMessage(QString, QString, QString)));
-	connect(this, SIGNAL(destroyed()), syncthread, SLOT(stop()));
 }
 testBaiduFaceAPI::~testBaiduFaceAPI() {
-	QSettings setting("setting.ini", QSettings::Format::NativeFormat, this);
+	QSettings setting("setting.ini", QSettings::Format::IniFormat, this);
 	setting.setValue("current path", QVariant(ui.filetree->UI().lineEdit->text())) ;
 	sthread->requestInterruption();
+	Debug() << " Interrupte the face server thread";
+	Debug()<<"Wait for face server thread end:"<<sthread->wait();
+	delete sthread;
 	syncthread->requestInterruption();
+	Debug() << " Interrupte the sync thread";
+	Debug() << "Wait for face server thread end:" << syncthread->wait();
+	delete syncthread;
 }
 void testBaiduFaceAPI::setTools() {
 	QActionGroup *lockgroup=new QActionGroup(this);

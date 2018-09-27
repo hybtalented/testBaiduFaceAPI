@@ -39,7 +39,9 @@ void createFaceDB::run()
 		QDir persondir = dirname + '/' + it;
 		QStringList personpics = persondir.entryList(QStringList() << "*.jpg" << "*.png");
 		int picperson = 0;
-
+		if (isInterruptionRequested()) {
+			return;
+		}
 		//开始读取一个人的人脸
 		Debug() << QString(u8"    正在录入%1的%2张人脸").arg(it).arg(personpics.count());
 		for (auto pic : personpics) {
@@ -64,14 +66,14 @@ void createFaceDB::run()
 			Debug() << QString(u8"    %2张人脸录入成功！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
 		}
 		else {
-			Debug() << QString(u8"    人脸库里人脸读取失败！目前总共录入了%1个人的人脸！").arg(++person).arg(picperson);
+			Debug() << QString(u8"    人脸库里人脸读取失败！目前总共录入了%1个人的人脸！").arg(person);
 		}
 
 	}
 	QTime endtime = QTime::currentTime();
 	double sec = double(starttime.msecsTo(endtime)) / 1000;
 	int min = sec / 60;
-	Info() << QString(u8"人脸数据库录入完成,总共耗时%1分钟%2秒").arg(min).arg(sec - 60 * min);
+	Debug() << QString(u8"人脸数据库录入完成,总共耗时%1分钟%2秒").arg(min).arg(sec - 60 * min);
 	emit sendMessage(QString("人脸库%1录入到%2完成").arg(dirname).arg(group), QString(u8"耗时：<font color=red> %1分钟%2秒 </font> 人数：  <font color=red> %3 </font> 总人脸数：  <font color=red> %4 </font> 已经在人脸库中的人脸数：  <font color=red> %7，成功读取人脸数：  <font color=red> %5 </font> 读取人脸成功率：  <font color=red> %6 %</font> ").arg(min).arg(sec - 60 * min).arg(person).arg(filenum).arg(successfile).arg(double(successfile+fileAlearyIn) / filenum * 100).arg(fileAlearyIn), u8"知道了!");
 }
 
